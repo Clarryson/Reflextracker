@@ -57,8 +57,8 @@ REFLEX/
 
 
 Development Rules
-REFLEX uses JavaScript only.
-.js and .jsx files are allowed.
+REFLEX .
+.js and .jsx files are allowed .ts not  allowed for now.
 TypeScript is not used in this project.
 Authentication is outside the current MVP scope.
 All feature work must be done through feature branches.
