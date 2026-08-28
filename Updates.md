@@ -1,4 +1,4 @@
-# REFLEX — Real-Time Updates & Event Handling Specification
+# REFLEX — Real-Time Updates & Event Handling Specification.
 
 This document defines how `apps/mobile` handles incoming server events, state updates, and alerts in real time over WebSockets (Socket.io) without requiring manual browser refreshes.
 
