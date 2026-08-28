@@ -1,0 +1,49 @@
+{
+  "name": "reflex-tracker-backend",
+  "version": "1.0.0",
+  "description": "Reflex Delivery Tracking System — REST API backend for Kenyan retailers",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "migrate": "node src/config/migrate.js",
+    "seed": "node src/config/seed.js",
+    "test": "jest --runInBand --forceExit",
+    "test:unit": "jest tests/unit --runInBand --forceExit",
+    "test:int": "jest tests/integration --runInBand --forceExit"
+  },
+  "keywords": [
+    "delivery",
+    "tracking",
+    "kenya",
+    "logistics",
+    "rest-api"
+  ],
+  "author": "Reflex Team",
+  "license": "MIT",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.2.0",
+    "mysql2": "^3.9.8",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testTimeout": 30000,
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ]
+  },
+  "allowScripts": {
+    "bcrypt@5.1.1": true
+  }
+}
