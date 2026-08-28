@@ -1,4 +1,4 @@
-# REFLEX — Offline Resilience & Low-Connectivity Specification
+# REFLEX — Offline Resilience & Low-Connectivity Specification.
 
 This document details the architectural strategies for maintaining reliable rider operations in `apps/mobile` when network connectivity is slow, intermittent, or completely unavailable.
 
