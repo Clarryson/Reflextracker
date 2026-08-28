@@ -35,3 +35,58 @@ Every outbound HTTP request initiated by the Rider PWA must include:
 ## 3. Real-Time Telemetry & Socket Data Pipeline
 
 Rider location tracking feeds into real-time dispatcher dashboards and creates permanent audit breadcrumbs in the database.
+
+```text
+┌─────────────────┐       Socket.io Event: "rider:location_update"       ┌─────────────────┐
+│  Rider PWA      │ ───────────────────────────────────────────────────► │  REFLEX Server   │
+│  (Geolocation)  │                                                      │  (Express + WS)  │
+└─────────────────┘                                                      └────────┬────────┘
+																											 │
+																		  ┌─────────────────────────┴────────┐
+																		  ▼                                  ▼
+															┌────────────────────┐             ┌────────────────────┐
+															│  Prisma Database   │             │  Dispatcher Room   │
+															│  (LocationLog)     │             │  ("dispatchers")   │
+															└────────────────────┘             └────────────────────┘
+```
+
+### Telemetry Pipeline Rules:
+1. **Active Transmission Window:** Transmit coordinate pings only when `status === 'PICKED_UP'`.
+2. **Payload Structure:** Each emitted socket packet must include `deliveryId`, `riderId`, `latitude`, `longitude`, and `timestamp`.
+3. **Server Ingestion:** The server immediately broadcasts the ping to room `delivery:<deliveryId>` for live tracking, while buffering or directly inserting into the `LocationLog` table.
+
+---
+
+## 4. Verification & Proof of Delivery (PoD) Submission
+
+The completion step closes the delivery lifecycle and requires strict verification.
+
+### Verification Flow:
+1. **Capture:** Rider scans customer QR code (or inputs manual text PIN) and captures a dropoff confirmation photo.
+2. **Local Pre-Processing:**
+	- Compress the captured image in the browser to reduce payload size (<500 KB).
+	- Convert image to a secure upload format (multipart form-data or base64 data URL).
+3. **Dispatch to Verification Route:** Send payload to `POST /api/deliveries/:id/verify`.
+4. **Backend Validation:**
+	- Backend compares `verificationCode` against the database record.
+	- If matching: Advances status to `DELIVERED`, stores the photo path, and terminates the active tracking session.
+	- If mismatch (400 Bad Request): Returns error message; UI displays alert and allows the rider to retry.
+
+---
+
+## 5. Error Handling, Network Faults & Conflict Resolution
+
+- **Idempotent Transitions:** If a network timeout occurs while clicking "Confirm Pickup", the mobile client can safely retry without triggering duplicate state side-effects.
+- **HTTP 409 (Conflict):** Occurs if the order was reassigned or cancelled by dispatch while the rider was performing an action. The app must intercept 409 responses, display an alert explaining the change, and refresh the local view.
+- **Failed Proof Submissions:** If the photo proof upload fails due to weak cellular upload bandwidth, store the raw code and photo locally and surface a "Retry Upload" banner.
+
+---
+
+## 6. Acceptance Criteria (Definition of Done)
+
+- [ ] App successfully fetches and renders active delivery data assigned to the rider ID.
+- [ ] Tapping "Confirm Pickup" updates the database status to `PICKED_UP` and sets `pickedUpAt`.
+- [ ] GPS coordinates during transit persist to the `LocationLog` table via WebSockets or batch REST calls.
+- [ ] Scanning the correct QR code transitions the delivery to `DELIVERED` and persists `proofOfDelivery`.
+- [ ] Incorrect verification codes return appropriate error messages without resetting the app state.
+- [ ] All network calls fail gracefully with clear feedback when the server is unreachable.
