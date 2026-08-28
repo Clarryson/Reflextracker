@@ -1,4 +1,4 @@
-# REFLEX — Rider App Backend Integration Specification
+# REFLEX — Rider App Backend Integration Specification.
 
 This document details the contract, data pipelines, and integration procedures required to connect `apps/mobile` with the REFLEX backend (`server/`) so that all rider interactions and telemetry are reliably persisted.
 
