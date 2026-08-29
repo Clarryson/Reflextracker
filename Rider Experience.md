@@ -29,3 +29,99 @@ This document outlines the core field-usability principles for the Rider PWA (`a
 ## 5. Multi-Sensory Feedback
 - Trigger device vibration feedback on scan success, errors, and assignments.
 - Play brief audio chimes for state confirmation without requiring screen focus.
+
+
+
+
+
+
+Manages client-side queues for offline mutations and GPS breadcrumbs.
+
+The Code: const DB_NAME = 'reflex_rider_db';
+const DB_VERSION = 1;
+const STORE_MUTATIONS = 'outbox_mutations';
+const STORE_LOCATIONS = 'location_buffer';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_MUTATIONS)) {
+        db.createObjectStore(STORE_MUTATIONS, { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains(STORE_LOCATIONS)) {
+        db.createObjectStore(STORE_LOCATIONS, { keyPath: 'id', autoIncrement: true });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function queueMutation(mutation) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_MUTATIONS, 'readwrite');
+    const store = tx.objectStore(STORE_MUTATIONS);
+    const item = {
+      ...mutation,
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    };
+    const req = store.add(item);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getPendingMutations() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_MUTATIONS, 'readonly');
+    const store = tx.objectStore(STORE_MUTATIONS);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function removeMutation(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_MUTATIONS, 'readwrite');
+    const store = tx.objectStore(STORE_MUTATIONS);
+    const req = store.delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function bufferLocation(locationData) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_LOCATIONS, 'readwrite');
+    const store = tx.objectStore(STORE_LOCATIONS);
+    const req = store.add(locationData);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function flushLocationBuffer() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_LOCATIONS, 'readwrite');
+    const store = tx.objectStore(STORE_LOCATIONS);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const items = req.result || [];
+      store.clear();
+      resolve(items);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}     
+
