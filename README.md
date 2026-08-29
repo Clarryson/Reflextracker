@@ -1,473 +1,248 @@
-# 🚚 Reflex Delivery Tracking System — Backend API
+# 🚚 Reflex Delivery Tracking System — Backend API & Real-Time Engine
 
-A clean, modular REST API backend for Reflex, an MVP delivery tracking system designed for small Kenyan retailers (electronics shops, pharmacies, hardware stores).
+> A modular, production-ready REST API & Real-Time WebSocket backend for the Reflex Delivery Tracking System, designed for urban logistics and retail deliveries in Kenya.
+
+[![Live on Railway](https://img.shields.io/badge/Railway-Live%20Backend-0B0D0E?style=for-the-badge&logo=railway&logoColor=white)](https://backend-production-7f0d0.up.railway.app)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
+[![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://www.mysql.com)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-Realtime-010101?style=for-the-badge&logo=socket.io&logoColor=white)](https://socket.io)
 
 ---
 
-## Architecture
+## 🌐 Live Production Backend
 
+- **Live Base API URL**: `https://backend-production-7f0d0.up.railway.app`
+- **Health Check**: [`https://backend-production-7f0d0.up.railway.app/health`](https://backend-production-7f0d0.up.railway.app/health)
+- **Frontend Integration Guide**: See [`FRONTEND_INTEGRATION_GUIDE.md`](./FRONTEND_INTEGRATION_GUIDE.md) for quick-start connection instructions, contracts, and Socket.IO listeners.
+
+---
+
+## 🏗️ System Architecture
+
+```text
+  ┌────────────────────────┐         ┌────────────────────────┐
+  │   Retailer / Dispatcher│         │       Rider PWA        │
+  │     Web Application    │         │  (QR Scanner & Proof)  │
+  └───────────┬────────────┘         └───────────┬────────────┘
+              │                                  │
+              │  HTTP/REST (JSON & Multipart)    │
+              │  + WebSocket (Socket.IO Events)  │
+              ▼                                  ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                   Railway Cloud Infrastructure                   │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │               Node.js + Express REST API Server            │  │
+│  │                                                            │  │
+│  │  /api/auth         Authentication, RBAC & JWT Middleware   │  │
+│  │  /api/deliveries   Full Delivery Lifecycle & QR Verify     │  │
+│  │  /api/riders       Rider Management & Assignment           │  │
+│  │                                                            │  │
+│  │  ┌──────────────────────────────────────────────────────┐  │  │
+│  │  │                 Delivery State Machine               │  │  │
+│  │  │      OPEN ➔ ASSIGNED ➔ PICKED_UP ➔ DELIVERED        │  │  │
+│  │  └──────────────────────────────────────────────────────┘  │  │
+│  │                                                            │  │
+│  │  ┌──────────────────────────────────────────────────────┐  │  │
+│  │  │                 Real-Time Event Engine               │  │  │
+│  │  │       Socket.IO Broadcasts (delivery:updated)        │  │  │
+│  │  └──────────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────┬─────────────────────────────┘  │
+│                                 │                                │
+│                                 ▼                                │
+│                  ┌─────────────────────────────┐                 │
+│                  │        MySQL 8.0 Cloud      │                 │
+│                  │  (Managed Database Cluster) │                 │
+│                  └─────────────────────────────┘                 │
+└──────────────────────────────────────────────────────────────────┘
 ```
-React Web Frontend
-        │
-        │ HTTP/REST  +  WebSocket (Socket.IO)
-        ▼
-┌─────────────────────────────────────────────────────────┐
-│              Node.js + Express Backend                  │
-│                                                         │
-│  /api/auth         Authentication & JWT                 │
-│  /api/deliveries   Full delivery lifecycle              │
-│  /api/riders       Rider management (dispatcher)        │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │             Delivery Service                    │   │
-│  │         (State Machine + Validation)            │   │
-│  └─────────────────────────────────────────────────┘   │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │            Real-time Module                     │   │
-│  │         Socket.IO  +  deliveryEvents            │   │
-│  └─────────────────────────────────────────────────┘   │
-└──────────────────────────────┬──────────────────────────┘
-                               │
-                               ▼
-                        ┌────────────┐
-                        │   MySQL    │
-                        │  Database  │
-                        └────────────┘
+
+---
+
+## ⚡ Technology Stack
+
+| Layer / Domain | Technology | Description & Capabilities |
+|---|---|---|
+| **Runtime** | **Node.js (v18+)** | High-performance asynchronous JavaScript engine |
+| **Framework** | **Express.js (4.x)** | Clean, modular MVC-style REST API routing and middleware architecture |
+| **Cloud Hosting** | **Railway Cloud** | Automated serverless continuous deployments with zero-downtime rollouts |
+| **Database** | **MySQL 8.0 (Railway)** | ACID-compliant relational DB with connection pooling & TCP proxy fallback |
+| **Database Driver** | **`mysql2/promise`** | Promise-based driver utilizing prepared statements to eliminate SQL injection |
+| **Real-Time Engine** | **Socket.IO (4.x)** | Bi-directional, low-latency WebSocket communication for live status feeds |
+| **Authentication** | **JWT + bcrypt** | Stateless JSON Web Tokens with encrypted password hashing and RBAC middleware |
+| **File Storage** | **Multer** | Multipart/form-data processor for photographic proof-of-delivery uploads |
+| **Testing Suite** | **Jest + Supertest** | Automated unit tests and full-flow end-to-end integration test suites |
+| **Dev Tooling** | **Dotenv & Nodemon** | Environment configuration management and live-reloading dev workflow |
+| **Mobile Access** | **LocalTunnel** | Automatic secure tunnel provisioning for camera testing on physical phones |
+
+---
+
+## 📦 Database Schema Overview
+
+```text
+┌──────────────┐       ┌─────────────────┐       ┌──────────────────────┐
+│    users     │1     *│   deliveries    │1     1│  proof_of_delivery   │
+├──────────────┤───────├─────────────────┤───────├──────────────────────┤
+│ id (PK)      │       │ id (PK)         │       │ id (PK)              │
+│ name         │       │ reference (UNIQ)│       │ delivery_id (FK UNIQ)│
+│ email (UNIQ) │       │ retailer_id (FK)│       │ rider_id (FK)        │
+│ phone        │       │ rider_id (FK)   │       │ file_url             │
+│ password_hash│       │ status          │       │ file_type            │
+│ role         │       │ qr_token        │       │ uploaded_at          │
+└──────────────┘       │ qr_verified     │       └──────────────────────┘
+                       │ customer_name   │
+                       │ delivery_address│       ┌──────────────────────┐
+                       │ item_description│1     *│   delivery_history   │
+                       └────────┬────────┘───────├──────────────────────┤
+                                │                │ id (PK)              │
+                                │1              *│ delivery_id (FK)     │
+                                └────────────────┤ changed_by (FK)      │
+                                                 │ previous_status      │
+                                                 │ new_status           │
+                                                 │ notes                │
+                                                 │ created_at           │
+                                                 └──────────────────────┘
 ```
 
----
-
-## Technology Stack
-
-| Layer | Technology |
-|---|---|
-| Runtime | Node.js |
-| Framework | Express.js |
-| Database | MySQL 8+ |
-| DB Driver | mysql2/promise |
-| Auth | JWT (jsonwebtoken) + bcrypt |
-| Real-time | Socket.IO |
-| File upload | Multer |
-| Config | dotenv |
-| Testing | Jest + supertest |
+### Supported Roles & Permissions
+- **`RETAILER`**: Creates new deliveries, tracks own store orders, accesses QR codes for package labeling.
+- **`DISPATCHER`**: Views all platform deliveries, queries rider availability, assigns/reassigns riders.
+- **`RIDER`**: Confirms package pickup, scans customer QR tokens, uploads proof-of-delivery photos, completes orders.
 
 ---
 
-## Database Schema
+## 🚀 Delivery State Machine
 
-### `users`
-| Column | Type | Notes |
-|---|---|---|
-| id | INT UNSIGNED PK | Auto-increment |
-| name | VARCHAR(120) | |
-| email | VARCHAR(255) UNIQUE | |
-| phone | VARCHAR(20) | |
-| password_hash | VARCHAR(255) | bcrypt |
-| role | ENUM | RETAILER, DISPATCHER, RIDER |
-| created_at / updated_at | DATETIME | |
+```text
+      ┌──────────┐
+      │   OPEN   │ ─── Retailer registers order
+      └────┬─────┘
+           │ DISPATCHER: PATCH /api/deliveries/:id/assign
+           ▼
+     ┌───────────┐
+     │  ASSIGNED │ ─── Rider allocated to package
+     └─────┬─────┘
+           │ RIDER: POST /api/deliveries/:id/pickup
+           ▼
+    ┌─────────────┐
+    │  PICKED_UP  │ ─── Package in transit
+    └──────┬──────┘
+           │ 1. RIDER: POST /api/deliveries/:id/verify  (QR Scan)
+           │ 2. RIDER: POST /api/deliveries/:id/proof   (Photo Upload)
+           │ 3. RIDER: POST /api/deliveries/:id/complete
+           ▼
+    ┌─────────────┐
+    │  DELIVERED  │ ─── Terminal State (Completed)
+    └─────────────┘
+```
 
-### `deliveries`
-| Column | Type | Notes |
-|---|---|---|
-| id | INT UNSIGNED PK | |
-| delivery_reference | VARCHAR(20) UNIQUE | DEL-000001 |
-| retailer_id | FK → users | |
-| rider_id | FK → users NULL | |
-| customer_name / phone | VARCHAR | |
-| delivery_address | TEXT | |
-| item_description | TEXT | |
-| status | ENUM | OPEN, ASSIGNED, PICKED_UP, DELIVERED, CANCELLED, FAILED, INCIDENT |
-| qr_token | VARCHAR(100) | Secure random token |
-| qr_verified | TINYINT(1) | 0 / 1 |
-| created_at / updated_at | DATETIME | |
-| picked_up_at / delivered_at | DATETIME NULL | |
-
-### `delivery_history` (append-only)
-| Column | Type |
-|---|---|
-| id | INT PK |
-| delivery_id | FK |
-| changed_by | FK → users |
-| previous_status | VARCHAR NULL |
-| new_status | VARCHAR |
-| notes | TEXT |
-| created_at | DATETIME |
-
-### `proof_of_delivery`
-| Column | Type |
-|---|---|
-| id | INT PK |
-| delivery_id | FK UNIQUE |
-| rider_id | FK |
-| file_url | VARCHAR(500) |
-| file_type | VARCHAR(50) |
-| uploaded_at | DATETIME |
-
-### `incidents`
-| Column | Type |
-|---|---|
-| id | INT PK |
-| delivery_id | FK |
-| reported_by | FK → users |
-| incident_type | ENUM |
-| description | TEXT |
-| status | ENUM OPEN/RESOLVED |
-| created_at / resolved_at | DATETIME |
+*Alternative / Exceptional States:* `CANCELLED`, `FAILED`, `INCIDENT`
 
 ---
 
-## API Endpoints
+## 📡 API Endpoints Reference
 
-### Authentication
-| Method | Path | Role | Description |
+### 1. Authentication (`/api/auth`)
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | /api/auth/register | Public | Create account |
-| POST | /api/auth/login | Public | Login, returns JWT |
-| GET | /api/auth/me | Any | Current user profile |
+| `POST` | `/api/auth/register` | Public | Create new retailer or rider account |
+| `POST` | `/api/auth/login` | Public | Authenticate user & return JWT token |
+| `GET` | `/api/auth/me` | Bearer | Retrieve authenticated profile |
 
-### Deliveries
-| Method | Path | Role | Description |
+### 2. Deliveries Management (`/api/deliveries`)
+| Method | Endpoint | Allowed Roles | Description |
 |---|---|---|---|
-| POST | /api/deliveries | RETAILER | Create delivery |
-| GET | /api/deliveries | Any | List (role-scoped) |
-| GET | /api/deliveries/:id | Any | Full detail |
-| PATCH | /api/deliveries/:id/assign | DISPATCHER | Assign rider |
-| PATCH | /api/deliveries/:id/reassign | DISPATCHER | Change rider |
-| POST | /api/deliveries/:id/pickup | RIDER | Confirm pickup |
-| POST | /api/deliveries/:id/verify | RIDER | Verify QR code |
-| POST | /api/deliveries/:id/proof | RIDER | Upload proof (multipart) |
-| POST | /api/deliveries/:id/complete | RIDER | Complete delivery |
-| GET | /api/deliveries/:id/history | Any | Status history |
-| POST | /api/deliveries/:id/incidents | RIDER/DISPATCHER | Report incident |
-| GET | /api/deliveries/:id/incidents | Any | List incidents |
+| `POST` | `/api/deliveries` | `RETAILER` | Create a new delivery order |
+| `GET` | `/api/deliveries` | `RETAILER`, `DISPATCHER`, `RIDER` | List deliveries (role-scoped filter) |
+| `GET` | `/api/deliveries/:id` | All Roles | Retrieve full delivery details & history |
+| `PATCH` | `/api/deliveries/:id/assign` | `DISPATCHER` | Assign rider to open delivery |
+| `PATCH` | `/api/deliveries/:id/reassign` | `DISPATCHER` | Change assigned rider |
+| `POST` | `/api/deliveries/:id/pickup` | `RIDER` | Confirm pickup from retailer |
+| `POST` | `/api/deliveries/:id/verify` | `RIDER` | Verify delivery QR code token |
+| `POST` | `/api/deliveries/:id/proof` | `RIDER` | Upload multipart proof photo (`proof` field) |
+| `POST` | `/api/deliveries/:id/complete` | `RIDER` | Mark delivery as completed |
+| `GET` | `/api/deliveries/:id/history` | All Roles | Fetch audit trail of status changes |
+| `POST` | `/api/deliveries/:id/incidents`| `RIDER`, `DISPATCHER` | Log transit issue / incident |
 
-### Riders (Dispatcher only)
-| Method | Path | Description |
-|---|---|---|
-| GET | /api/riders | List all riders |
-| GET | /api/riders/:id | Rider detail + active deliveries |
-
----
-
-## Authentication
-
-All protected endpoints require:
-```
-Authorization: Bearer <jwt-token>
-```
-
-JWT payload:
-```json
-{ "id": 1, "name": "Kamau", "email": "kamau@electronics.co.ke", "role": "RETAILER" }
-```
-
-Expiry is configurable via `JWT_EXPIRES_IN` (default: `7d`).
+### 3. Rider Management (`/api/riders`)
+| Method | Endpoint | Allowed Roles | Description |
+|---|---|---|---|
+| `GET` | `/api/riders` | `DISPATCHER` | List all active riders |
+| `GET` | `/api/riders/:id` | `DISPATCHER` | Get rider details and active queue |
 
 ---
 
-## Delivery Lifecycle
+## ⚡ Real-Time Socket.IO Integration
 
-```
-           CREATE
-              │
-           OPEN
-              │  DISPATCHER assigns rider
-           ASSIGNED
-              │  RIDER confirms pickup
-           PICKED_UP
-              │  RIDER verifies QR  (qr_verified = true)
-              │  RIDER uploads proof
-              │  RIDER calls /complete
-           DELIVERED
-```
+Connect to the live WebSocket server:
 
-Possible incident states: `CANCELLED`, `FAILED`, `INCIDENT`  
-Terminal states (no further transitions): `DELIVERED`, `CANCELLED`, `FAILED`
-
----
-
-## QR Verification Flow
-
-1. **Delivery created** → backend generates `qr_token` (format: `REFLEX-DEL-XXXXXX-{32-hex}`)
-2. **Frontend** generates a QR image from this token string and displays/prints it with the package
-3. **Rider scans** the QR code at delivery
-4. **Frontend** sends `POST /api/deliveries/:id/verify` with `{ qrToken }`
-5. **Backend** compares the submitted token with the stored token (constant-time comparison)
-6. If valid → sets `qr_verified = true` and emits `delivery:verified` event
-7. **Required** before calling `/complete`
-
-No sensitive PII is embedded in the QR token.
-
----
-
-## Proof of Delivery
-
-- Endpoint: `POST /api/deliveries/:id/proof`
-- Content-Type: `multipart/form-data`
-- Field name: `proof`
-- Allowed types: `image/jpeg`, `image/png`, `application/pdf`
-- Max size: 5 MB (configurable via `MAX_FILE_SIZE_MB`)
-- Files stored in: `uploads/proof/` (gitignored)
-- Metadata stored in `proof_of_delivery` table
-
----
-
-## Live Update Events (Socket.IO)
-
-### Client Connection
 ```javascript
-const socket = io('http://localhost:5000', {
-  auth: { token: '<jwt-token>' }
+import { io } from 'socket.io-client';
+
+const socket = io('https://backend-production-7f0d0.up.railway.app', {
+  auth: { token: localStorage.getItem('jwt_token') }
+});
+
+// Real-time delivery status updates
+socket.on('delivery:updated', (data) => {
+  console.log('Live status update:', data);
+  // data: { event: 'delivery:picked_up', deliveryId: 12, status: 'PICKED_UP', timestamp: '...' }
 });
 ```
 
-### Subscribe to a Delivery
-```javascript
-socket.emit('join:delivery', { deliveryId: 42 });
-```
+---
 
-### Events Emitted by Server
+## 🔐 Seeded Demo Accounts (for Testing)
 
-All events emit two messages simultaneously:
-- `delivery:updated` — unified event with `{ event, deliveryId, timestamp, ...payload }`
-- Named event (e.g. `delivery:assigned`) — for fine-grained subscriptions
-
-| Event | When |
-|---|---|
-| `delivery:created` | Retailer creates delivery |
-| `delivery:assigned` | Dispatcher assigns rider |
-| `delivery:reassigned` | Dispatcher changes rider |
-| `delivery:picked_up` | Rider confirms pickup |
-| `delivery:verified` | QR code verified |
-| `delivery:proof_uploaded` | Proof of delivery uploaded |
-| `delivery:delivered` | Delivery completed |
-| `delivery:incident` | Incident reported |
+| Role | Email | Password | Details |
+|---|---|---|---|
+| **Retailer** | `kamau@electronics.co.ke` | `Password123!` | Kamau Electronics (Nairobi CBD) |
+| **Retailer** | `aisha@pharma.co.ke` | `Password123!` | Aisha Pharma Store |
+| **Dispatcher** | `omondi@reflex.co.ke` | `Password123!` | Reflex Central Logistics Hub |
+| **Rider** | `brian@rider.co.ke` | `Password123!` | Rider Unit 1 (Motorcycle) |
+| **Rider** | `grace@rider.co.ke` | `Password123!` | Rider Unit 2 (Bicycle) |
 
 ---
 
-## Response Format
-
-### Success
-```json
-{
-  "success": true,
-  "data": { ... }
-}
-```
-
-### Error
-```json
-{
-  "success": false,
-  "message": "Delivery not found."
-}
-```
-
-### HTTP Status Codes
-| Code | Meaning |
-|---|---|
-| 200 | OK |
-| 201 | Created |
-| 400 | Bad Request (validation) |
-| 401 | Unauthorized (no/invalid token) |
-| 403 | Forbidden (wrong role / not your delivery) |
-| 404 | Not Found |
-| 409 | Conflict (invalid state transition) |
-| 500 | Internal Server Error |
-
----
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and fill in your values:
-
-```env
-# Server
-PORT=5000
-NODE_ENV=development
-
-# MySQL
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=your_password
-DB_NAME=reflex_tracker
-
-# Test database
-DB_NAME_TEST=reflex_tracker_test
-
-# JWT
-JWT_SECRET=at_least_32_random_characters
-JWT_EXPIRES_IN=7d
-
-# CORS (comma-separated)
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-
-# Uploads
-UPLOAD_DIR=uploads/proof
-MAX_FILE_SIZE_MB=5
-```
-
----
-
-## Local Setup
+## 🛠️ Local Development & Setup
 
 ### Prerequisites
-- Node.js 18+
-- MySQL 8+
-- npm
+- **Node.js**: v18.0.0 or higher
+- **MySQL**: v8.0 or higher (or Railway Cloud MySQL instance)
 
-### Steps
+### Installation Steps
 
 ```bash
-# 1. Clone and install
-git clone <repo>
-cd Reflex-tracker
+# 1. Clone the repository
+git clone git@github.com:Clarryson/Reflextracker.git
+cd Reflextracker
+
+# 2. Install dependencies
 npm install
 
-# 2. Configure environment
+# 3. Setup environment variables
 cp .env.example .env
-# Edit .env with your MySQL credentials and JWT secret
 
-# 3. Create the database
-mysql -u root -p -e "CREATE DATABASE reflex_tracker;"
-# (For tests)
-mysql -u root -p -e "CREATE DATABASE reflex_tracker_test;"
+# 4. Initialize Database Schema & Seed Data
+mysql -u root -p < schema.sql
+mysql -u root -p < seed.sql
 
-# 4. Run migrations
-npm run migrate
-
-# 5. (Optional) Seed demo data
-npm run seed
-
-# 6. Start development server
+# 5. Start Development Server
 npm run dev
 ```
 
-Server starts at `http://localhost:5000`.
-
----
-
-## Running Tests
+### Running Automated Tests
 
 ```bash
-# All tests (requires MySQL)
+# Run complete test suite (Unit + E2E)
 npm test
 
-# Unit tests only (no DB required)
+# Run unit tests only (no database required)
 npm run test:unit
-
-# Integration tests only (requires MySQL test DB)
-npm run test:int
-```
-
-Integration tests automatically use `DB_NAME_TEST` and truncate tables between each suite.
-
----
-
-## Example API Requests
-
-### Register
-```bash
-curl -X POST http://localhost:5000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Kamau Electronics",
-    "email": "kamau@electronics.co.ke",
-    "phone": "0712345678",
-    "password": "Password123!",
-    "role": "RETAILER"
-  }'
-```
-
-### Login
-```bash
-curl -X POST http://localhost:5000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "kamau@electronics.co.ke", "password": "Password123!"}'
-```
-
-### Create Delivery (Retailer)
-```bash
-curl -X POST http://localhost:5000/api/deliveries \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "customerName": "John Kamau",
-    "customerPhone": "0712345678",
-    "deliveryAddress": "Kilimani, Nairobi",
-    "itemDescription": "Samsung Galaxy A15"
-  }'
-```
-
-### Assign Rider (Dispatcher)
-```bash
-curl -X PATCH http://localhost:5000/api/deliveries/1/assign \
-  -H "Authorization: Bearer <dispatcher-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"riderId": 4}'
-```
-
-### Confirm Pickup (Rider)
-```bash
-curl -X POST http://localhost:5000/api/deliveries/1/pickup \
-  -H "Authorization: Bearer <rider-token>"
-```
-
-### Verify QR (Rider)
-```bash
-curl -X POST http://localhost:5000/api/deliveries/1/verify \
-  -H "Authorization: Bearer <rider-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"qrToken": "REFLEX-DEL-000001-abc123..."}'
-```
-
-### Upload Proof (Rider)
-```bash
-curl -X POST http://localhost:5000/api/deliveries/1/proof \
-  -H "Authorization: Bearer <rider-token>" \
-  -F "proof=@/path/to/photo.jpg"
-```
-
-### Complete Delivery (Rider)
-```bash
-curl -X POST http://localhost:5000/api/deliveries/1/complete \
-  -H "Authorization: Bearer <rider-token>"
-```
-
-### Report Incident
-```bash
-curl -X POST http://localhost:5000/api/deliveries/1/incidents \
-  -H "Authorization: Bearer <rider-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "incidentType": "CUSTOMER_UNAVAILABLE",
-    "description": "Customer was unavailable at the delivery address."
-  }'
 ```
 
 ---
 
-## Known Limitations
-
-- **File storage**: Proof files are stored on the local filesystem (`uploads/proof/`). For production, migrate to cloud storage (AWS S3, Google Cloud Storage).
-- **QR reference counter**: The delivery reference generator reads the last DB row. Under very high concurrency a dedicated sequence table would be safer.
-- **No refresh tokens**: JWT sessions cannot be revoked until expiry.
-- **No pagination**: List endpoints return all matching deliveries.
-- **No SMS/push notifications**: Live updates are Socket.IO only.
-
----
-
-## Future Improvements
-
-- Cloud file storage (S3/GCS)
-- Pagination and search on list endpoints
-- Refresh token / token revocation
-- SMS notifications via Africa's Talking
-- Rider availability management
-- Incident resolution workflow
-- Admin dashboard endpoints
-- Rate limiting
-- Helmet.js security headers
-- Docker Compose setup
+## 📄 License
+This project is licensed under the **MIT License**.
