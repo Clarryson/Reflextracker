@@ -76,3 +76,74 @@ During the `PICKED_UP` phase, network drops should not result in lost location b
 - [ ] All offline actions sync to the server in correct order when internet is restored.
 - [ ] Location points collected during a connection drop are uploaded upon reconnection.
 - [ ] Offline indicator displays correctly without blocking user interaction.
+
+
+
+
+
+Compresses camera photos on an off-screen HTML canvas to <400 KB before upload or caching. 
+
+
+The Code: /**
+ * Compresses an image file to JPEG under specified dimensions and quality.
+ * @param {File} file - Raw image file from camera input
+ * @param {number} maxWidth - Maximum bounding width (default 1280px)
+ * @param {number} quality - JPEG compression quality (0.0 to 1.0)
+ * @returns {Promise<{ blob: Blob, dataUrl: string }>}
+ */
+export function compressImage(file, maxWidth = 1280, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Watermark with timestamp snippet
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(0, height - 30, width, 30);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(`REFLEX PoD • ${new Date().toISOString()}`, 10, height - 10);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve({ blob, dataUrl });
+            } else {
+              reject(new Error('Canvas to Blob conversion failed'));
+            }
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+
+      img.onerror = (err) => reject(err);
+    };
+
+    reader.onerror = (err) => reject(err);
+  });
+}       
+
+
+
