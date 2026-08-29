@@ -90,3 +90,162 @@ The completion step closes the delivery lifecycle and requires strict verificati
 - [ ] Scanning the correct QR code transitions the delivery to `DELIVERED` and persists `proofOfDelivery`.
 - [ ] Incorrect verification codes return appropriate error messages without resetting the app state.
 - [ ] All network calls fail gracefully with clear feedback when the server is unreachable.
+
+
+
+
+
+Uses direct device camera integration with instant image compression.     
+
+
+
+import React, { useState, useRef } from 'react';
+import { compressImage } from '../utils/imageCompressor';
+
+export default function CameraProofModal({ isOpen, onClose, onPhotoAccepted }) {
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [compressedBlob, setCompressedBlob] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef(null);
+
+  if (!isOpen) return null;
+
+  const handleCapture = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+    try {
+      const { blob, dataUrl } = await compressImage(file, 1280, 0.75);
+      setCompressedBlob(blob);
+      setPreviewUrl(dataUrl);
+    } catch (err) {
+      console.error('Image compression error:', err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRetake = () => {
+    setPreviewUrl(null);
+    setCompressedBlob(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleConfirm = () => {
+    if (compressedBlob && previewUrl) {
+      onPhotoAccepted({ blob: compressedBlob, dataUrl: previewUrl });
+      onClose();
+    }
+  };
+
+  return (
+    <div style={styles.overlay}>
+      <div style={styles.modalCard}>
+        <h3 style={styles.title}>Proof of Delivery Photo</h3>
+
+        {!previewUrl ? (
+          <div style={styles.uploadArea}>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              ref={fileInputRef}
+              onChange={handleCapture}
+              style={{ display: 'none' }}
+              id="camera-input"
+            />
+            <label htmlFor="camera-input" style={styles.cameraTriggerBtn}>
+              {isProcessing ? 'Processing Image...' : '📷 Open Camera'}
+            </label>
+          </div>
+        ) : (
+          <div style={styles.previewContainer}>
+            <img src={previewUrl} alt="Dropoff Proof" style={styles.previewImage} />
+            <div style={styles.btnRow}>
+              <button onClick={handleRetake} style={styles.retakeBtn}>
+                Retake
+              </button>
+              <button onClick={handleConfirm} style={styles.acceptBtn}>
+                Accept Photo
+              </button>
+            </div>
+          </div>
+        )}
+
+        <button onClick={onClose} style={styles.cancelBtn}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    zIndex: 9999,
+  },
+  modalCard: {
+    backgroundColor: '#1e293b',
+    width: '100%',
+    maxWidth: '480px',
+    borderTopLeftRadius: '20px',
+    borderTopRightRadius: '20px',
+    padding: '24px 16px',
+    boxSizing: 'border-box',
+    color: '#f8fafc',
+  },
+  title: { margin: '0 0 16px 0', fontSize: '18px', textAlign: 'center' },
+  uploadArea: { display: 'flex', justifyContent: 'center', margin: '20px 0' },
+  cameraTriggerBtn: {
+    backgroundColor: '#0284c7',
+    color: '#fff',
+    padding: '16px 24px',
+    borderRadius: '12px',
+    fontSize: '18px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    textAlign: 'center',
+    width: '100%',
+    display: 'block',
+  },
+  previewContainer: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  previewImage: { width: '100%', maxHeight: '300px', objectFit: 'cover', borderRadius: '8px' },
+  btnRow: { display: 'flex', gap: '12px', marginTop: '8px' },
+  retakeBtn: {
+    flex: 1,
+    padding: '14px',
+    backgroundColor: '#475569',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '16px',
+    fontWeight: 'bold',
+  },
+  acceptBtn: {
+    flex: 1,
+    padding: '14px',
+    backgroundColor: '#16a34a',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '16px',
+    fontWeight: 'bold',
+  },
+  cancelBtn: {
+    width: '100%',
+    marginTop: '16px',
+    padding: '12px',
+    background: 'none',
+    border: 'none',
+    color: '#94a3b8',
+    fontSize: '14px',
+    cursor: 'pointer',
+  },
+};     
