@@ -1,0 +1,102 @@
+import { useEffect, useRef, useState } from 'react';
+import { io } from 'socket.io-client';
+
+const WS_URL = import.meta.env.VITE_WS_BASE_URL || 'http://localhost:4000';
+
+export function useRiderSocket({ riderId, onAssignmentReceived, onOrderCancelled, onStatusChanged }) {
+  const [isConnected, setIsConnected] = useState(false);
+  const socketRef = useRef(null);
+
+  const triggerAlert = () => {
+    // 1. Haptic vibration
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate([200, 100, 200, 100, 400]);
+      } catch {
+        // Ignored if user has not interacted yet
+      }
+    }
+
+    // 2. Audio Chime (Dual tone D5 -> A5)
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15); // A5
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.4);
+      }
+    } catch {
+      // Audio might be restricted until user interacts
+    }
+  };
+
+  useEffect(() => {
+    if (!riderId) return;
+
+    const socket = io(WS_URL, {
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1500,
+      transports: ['websocket', 'polling'],
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setIsConnected(true);
+      socket.emit('rider:join', { riderId });
+    });
+
+    socket.on('disconnect', () => {
+      setIsConnected(false);
+    });
+
+    socket.on('delivery:assigned', (payload) => {
+      triggerAlert();
+      if (onAssignmentReceived) {
+        onAssignmentReceived(payload.delivery || payload);
+      }
+    });
+
+    socket.on('delivery:cancelled', (payload) => {
+      triggerAlert();
+      if (onOrderCancelled) {
+        onOrderCancelled(payload);
+      }
+    });
+
+    socket.on('delivery:reassigned', (payload) => {
+      triggerAlert();
+      if (onOrderCancelled) {
+        onOrderCancelled(payload);
+      }
+    });
+
+    socket.on('delivery:status_changed', (payload) => {
+      if (onStatusChanged) {
+        onStatusChanged(payload);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [riderId, onAssignmentReceived, onOrderCancelled, onStatusChanged]);
+
+  const emitLocation = (locationPayload) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('rider:location_update', locationPayload);
+    }
+  };
+
+  return { socket: socketRef.current, isConnected, emitLocation };
+}
