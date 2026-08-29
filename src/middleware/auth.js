@@ -3,6 +3,8 @@
 const jwt = require('jsonwebtoken');
 const { sendError } = require('../utils/response');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'reflex_delivery_tracker_jwt_secret_dev_key_2026';
+
 /**
  * Middleware: verifies the JWT and attaches the decoded user to req.user.
  * Expects: Authorization: Bearer <token>
@@ -15,7 +17,7 @@ function authenticate(req, res, next) {
 
   const token = authHeader.slice(7); // Remove "Bearer "
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded; // { id, name, email, role }
     next();
   } catch (err) {

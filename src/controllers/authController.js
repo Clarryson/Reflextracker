@@ -8,6 +8,7 @@ const { isValidEmail, isValidKenyanPhone, isNonEmptyString } = require('../utils
 
 const SALT_ROUNDS = 10;
 const ALLOWED_ROLES = ['RETAILER', 'DISPATCHER', 'RIDER'];
+const JWT_SECRET = process.env.JWT_SECRET || 'reflex_delivery_tracker_jwt_secret_dev_key_2026';
 
 // ─── Register ─────────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ async function login(req, res, next) {
       role: user.role,
     };
 
-    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+    const token = jwt.sign(payload, JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     });
 

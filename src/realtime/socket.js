@@ -2,6 +2,8 @@
 
 const jwt = require('jsonwebtoken');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'reflex_delivery_tracker_jwt_secret_dev_key_2026';
+
 let ioInstance = null;
 
 /**
@@ -17,23 +19,26 @@ function initSocket(httpServer, allowedOrigins) {
 
   ioInstance = new Server(httpServer, {
     cors: {
-      origin: allowedOrigins,
+      origin: '*',
       methods: ['GET', 'POST'],
     },
   });
 
-  // Authenticate incoming socket connections via JWT query param
+  // Authenticate incoming socket connections via JWT query param or allow guest mode
   ioInstance.use((socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
-    if (!token) {
-      return next(new Error('Authentication required.'));
+    if (!token || token === 'guest' || token === 'guest-preview') {
+      socket.user = { id: 0, role: 'GUEST' };
+      return next();
     }
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET);
       socket.user = decoded;
       next();
-    } catch {
-      next(new Error('Invalid or expired token.'));
+    } catch (err) {
+      // Fall back to guest role instead of blocking connection
+      socket.user = { id: 0, role: 'GUEST' };
+      next();
     }
   });
 

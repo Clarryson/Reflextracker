@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Reflex — Mobile QR Delivery Verification</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0e17;
+      --card-bg: rgba(18, 26, 43, 0.95);
+      --primary: #3b82f6;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: rgba(255, 255, 255, 0.1);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0a0e17 75%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      backdrop-filter: blur(16px);
+      text-align: center;
+    }
+
+    .header-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .info-box {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: left;
+      margin-bottom: 20px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .info-row:last-child { margin-bottom: 0; }
+
+    .info-label { color: var(--text-muted); }
+    .info-val { font-weight: 600; text-align: right; }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .badge-status { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:active { background: #2563eb; transform: scale(0.98); }
+
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:active { background: #059669; transform: scale(0.98); }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .result-card {
+      display: none;
+      padding: 20px;
+      border-radius: 12px;
+      margin-top: 16px;
+      animation: popIn 0.3s ease;
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .result-success {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid var(--success);
+      color: #34d399;
+    }
+
+    .result-error {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid var(--danger);
+      color: #f87171;
+    }
+
+    .rider-select-box {
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    select {
+      width: 100%;
+      background: rgba(10, 14, 23, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      color: white;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header-icon">📱</div>
+    <h1>QR Delivery Verification</h1>
+    <p class="subtitle">Scanned via Rider Mobile Device</p>
+
+    <div class="info-box" id="infoBox">
+      <div class="info-row">
+        <span class="info-label">Delivery ID:</span>
+        <span class="info-val" id="dispDeliveryId">Loading…</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Reference:</span>
+        <span class="info-val" id="dispReference">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Item:</span>
+        <span class="info-val" id="dispItem">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Customer:</span>
+        <span class="info-val" id="dispCustomer">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Current Status:</span>
+        <span class="info-val"><span id="dispStatus" class="badge badge-status">-</span></span>
+      </div>
+    </div>
+
+    <!-- Active Rider Login Section -->
+    <div class="rider-select-box" id="riderSection">
+      <label style="font-size: 12px; color: var(--text-muted);">Verifying Rider Account:</label>
+      <select id="riderSelect" onchange="handleRiderChanged()">
+        <option value="brian@rider.co.ke">Rider Brian Mutua (brian@rider.co.ke)</option>
+        <option value="grace@rider.co.ke">Rider Grace Wanjiru (grace@rider.co.ke)</option>
+        <option value="james@rider.co.ke">Rider James Otieno (james@rider.co.ke)</option>
+      </select>
+    </div>
+
+    <!-- Action Buttons -->
+    <button class="btn btn-primary" id="btnVerify" onclick="executeVerification()">
+      ⚡ 1. Verify QR Code Token
+    </button>
+
+    <input type="file" id="cameraProofInput" accept="image/*" capture="environment" style="display:none;" onchange="handleProofCaptured(event)">
+
+    <button class="btn btn-success" id="btnComplete" onclick="executeFullCompletion()" style="display:none;">
+      📸 2. Capture Proof & Complete Delivery
+    </button>
+
+    <!-- Result Banner -->
+    <div id="resultBox" class="result-card"></div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const deliveryId = params.get('id');
+    const qrToken = params.get('token');
+
+    let currentToken = null;
+    let deliveryData = null;
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById('dispDeliveryId').textContent = deliveryId || 'None specified';
+      if (!deliveryId || !qrToken) {
+        showResult('Missing QR parameters (id or token).', false);
+        return;
+      }
+
+      await loginRider(document.getElementById('riderSelect').value);
+      await fetchDeliveryDetails();
+    });
+
+    async function handleRiderChanged() {
+      await loginRider(document.getElementById('riderSelect').value);
+      await fetchDeliveryDetails();
+    }
+
+    async function loginRider(email) {
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: 'Password123!' })
+        });
+        const json = await res.json();
+        if (json.success) {
+          currentToken = json.data.token;
+        }
+      } catch (err) {
+        console.error('Login error', err);
+      }
+    }
+
+    async function fetchDeliveryDetails() {
+      try {
+        const res = await fetch(`/api/deliveries/${deliveryId}`, {
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        const json = await res.json();
+        if (json.success && json.data?.delivery) {
+          deliveryData = json.data.delivery;
+          document.getElementById('dispReference').textContent = deliveryData.reference;
+          document.getElementById('dispItem').textContent = deliveryData.itemDescription;
+          document.getElementById('dispCustomer').textContent = `${deliveryData.customerName} (${deliveryData.customerPhone})`;
+          document.getElementById('dispStatus').textContent = deliveryData.status;
+
+          if (deliveryData.qrVerified) {
+            document.getElementById('btnVerify').style.display = 'none';
+            document.getElementById('btnComplete').style.display = 'flex';
+          }
+          if (deliveryData.status === 'DELIVERED') {
+            showResult(`🎉 Delivery ${deliveryData.reference} is already completed and delivered!`, true);
+            document.getElementById('btnVerify').style.display = 'none';
+            document.getElementById('btnComplete').style.display = 'none';
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function executeVerification() {
+      showResult('Verifying QR token with server…', true);
+      try {
+        const res = await fetch(`/api/deliveries/${deliveryId}/verify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentToken}`
+          },
+          body: JSON.stringify({ qrToken })
+        });
+        const json = await res.json();
+        if (json.success) {
+          if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+          showResult('✅ QR Verified successfully! Proceed to upload proof of delivery.', true);
+          document.getElementById('btnVerify').style.display = 'none';
+          document.getElementById('btnComplete').style.display = 'flex';
+          fetchDeliveryDetails();
+        } else {
+          showResult('❌ Verification Error: ' + json.message, false);
+        }
+      } catch (err) {
+        showResult('Network Error: ' + err.message, false);
+      }
+    }
+
+    function executeFullCompletion() {
+      document.getElementById('cameraProofInput').click();
+    }
+
+    async function handleProofCaptured(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      showResult('Uploading proof photo & completing delivery…', true);
+
+      // Upload Proof
+      const formData = new FormData();
+      formData.append('proof', file);
+
+      try {
+        const proofRes = await fetch(`/api/deliveries/${deliveryId}/proof`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${currentToken}` },
+          body: formData
+        });
+        const proofJson = await proofRes.json();
+        if (!proofJson.success) {
+          showResult('Proof upload failed: ' + proofJson.message, false);
+          return;
+        }
+
+        // Complete Delivery
+        const compRes = await fetch(`/api/deliveries/${deliveryId}/complete`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        const compJson = await compRes.json();
+        if (compJson.success) {
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          showResult(`🎉 DELIVERY COMPLETE!\nDelivery ${deliveryData.reference} has been marked as DELIVERED in real-time.`, true);
+          document.getElementById('btnComplete').style.display = 'none';
+          fetchDeliveryDetails();
+        } else {
+          showResult('Completion failed: ' + compJson.message, false);
+        }
+      } catch (err) {
+        showResult('Error: ' + err.message, false);
+      }
+    }
+
+    function showResult(msg, isSuccess) {
+      const box = document.getElementById('resultBox');
+      box.style.display = 'block';
+      box.className = 'result-card ' + (isSuccess ? 'result-success' : 'result-error');
+      box.textContent = msg;
+    }
+  </script>
+</body>
+</html>

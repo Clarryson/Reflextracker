@@ -14,53 +14,52 @@ const path = require('path');
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Build the full delivery detail object (with history, proof, incidents).
+ * Build the full delivery detail object (with history, proof, incidents) in parallel.
  */
 async function buildDeliveryDetail(deliveryId) {
-  // Main delivery
-  const [deliveryRows] = await query(
-    `SELECT
-       d.id, d.delivery_reference AS reference, d.status,
-       d.customer_name AS customerName, d.customer_phone AS customerPhone,
-       d.delivery_address AS deliveryAddress, d.item_description AS itemDescription,
-       d.qr_verified AS qrVerified,
-       d.created_at AS createdAt, d.updated_at AS updatedAt,
-       d.picked_up_at AS pickedUpAt, d.delivered_at AS deliveredAt,
-       r.id AS retailerId, r.name AS retailerName, r.email AS retailerEmail,
-       ri.id AS riderId, ri.name AS riderName, ri.phone AS riderPhone
-     FROM deliveries d
-     JOIN users r  ON r.id  = d.retailer_id
-     LEFT JOIN users ri ON ri.id = d.rider_id
-     WHERE d.id = ?`,
-    [deliveryId]
-  );
-  if (deliveryRows.length === 0) return null;
+  const [
+    [deliveryRows],
+    history,
+    [proofRows],
+    [incidentRows]
+  ] = await Promise.all([
+    query(
+      `SELECT
+         d.id, d.delivery_reference AS reference, d.status,
+         d.customer_name AS customerName, d.customer_phone AS customerPhone,
+         d.delivery_address AS deliveryAddress, d.item_description AS itemDescription,
+         d.qr_token AS qrToken, d.qr_verified AS qrVerified,
+         d.created_at AS createdAt, d.updated_at AS updatedAt,
+         d.picked_up_at AS pickedUpAt, d.delivered_at AS deliveredAt,
+         r.id AS retailerId, r.name AS retailerName, r.email AS retailerEmail,
+         ri.id AS riderId, ri.name AS riderName, ri.phone AS riderPhone
+       FROM deliveries d
+       JOIN users r  ON r.id  = d.retailer_id
+       LEFT JOIN users ri ON ri.id = d.rider_id
+       WHERE d.id = ?`,
+      [deliveryId]
+    ),
+    getHistory(deliveryId),
+    query(
+      'SELECT id, file_url AS fileUrl, file_type AS fileType, uploaded_at AS uploadedAt FROM proof_of_delivery WHERE delivery_id = ?',
+      [deliveryId]
+    ),
+    query(
+      `SELECT i.id, i.incident_type AS incidentType, i.description, i.status,
+              i.created_at AS createdAt, i.resolved_at AS resolvedAt,
+              u.name AS reportedByName
+       FROM incidents i
+       JOIN users u ON u.id = i.reported_by
+       WHERE i.delivery_id = ?
+       ORDER BY i.created_at ASC`,
+      [deliveryId]
+    )
+  ]);
 
-  const delivery = deliveryRows[0];
-
-  // History
-  const history = await getHistory(deliveryId);
-
-  // Proof of delivery
-  const [proofRows] = await query(
-    'SELECT id, file_url AS fileUrl, file_type AS fileType, uploaded_at AS uploadedAt FROM proof_of_delivery WHERE delivery_id = ?',
-    [deliveryId]
-  );
-
-  // Incidents
-  const [incidentRows] = await query(
-    `SELECT i.id, i.incident_type AS incidentType, i.description, i.status,
-            i.created_at AS createdAt, i.resolved_at AS resolvedAt,
-            u.name AS reportedByName
-     FROM incidents i
-     JOIN users u ON u.id = i.reported_by
-     WHERE i.delivery_id = ?
-     ORDER BY i.created_at ASC`,
-    [deliveryId]
-  );
+  if (!deliveryRows || deliveryRows.length === 0) return null;
 
   return {
-    ...delivery,
+    ...deliveryRows[0],
     history,
     proof: proofRows[0] || null,
     incidents: incidentRows,
@@ -195,9 +194,10 @@ async function listDeliveries(req, res, next) {
          d.id, d.delivery_reference AS reference, d.status,
          d.customer_name AS customerName, d.customer_phone AS customerPhone,
          d.delivery_address AS deliveryAddress, d.item_description AS itemDescription,
+         d.qr_token AS qrToken, d.qr_verified AS qrVerified,
          d.created_at AS createdAt, d.updated_at AS updatedAt,
          d.picked_up_at AS pickedUpAt, d.delivered_at AS deliveredAt,
-         r.name AS retailerName,
+         r.name AS retailerName, r.email AS retailerEmail,
          ri.name AS riderName
        FROM deliveries d
        JOIN users r ON r.id = d.retailer_id
