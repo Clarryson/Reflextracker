@@ -71,3 +71,78 @@ Riders often keep their phones in mounts or pockets while driving, meaning visua
 - [ ] If an order is cancelled or reassigned by the dispatcher, the active screen clears gracefully with an explanation toast.
 - [ ] Socket automatically reconnects after network recovery and triggers a silent state catch-up fetch.
 - [ ] System notifications display when the app is in the background.
+
+
+
+Manages incoming dispatch events with vibration and audio chimes. 
+
+
+The code: import { useEffect, useRef, useState } from 'react';
+import { io } from 'socket.io-client';
+
+const WS_URL = import.meta.env.VITE_WS_BASE_URL || 'http://localhost:4000';
+
+export function useRiderSocket(riderId, onAssignmentReceived, onOrderCancelled) {
+  const [isConnected, setIsConnected] = useState(false);
+  const socketRef = useRef(null);
+
+  const triggerAlert = () => {
+    if ('vibrate' in navigator) {
+      navigator.vibrate([200, 100, 200, 100, 400]);
+    }
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.4);
+    } catch {
+      // Audio context might be restricted before first interaction
+    }
+  };
+
+  useEffect(() => {
+    if (!riderId) return;
+
+    const socket = io(WS_URL, {
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      transports: ['websocket'],
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setIsConnected(true);
+      socket.emit('rider:join', { riderId });
+    });
+
+    socket.on('disconnect', () => {
+      setIsConnected(false);
+    });
+
+    socket.on('delivery:assigned', (payload) => {
+      triggerAlert();
+      if (onAssignmentReceived) onAssignmentReceived(payload.delivery);
+    });
+
+    socket.on('delivery:cancelled', (payload) => {
+      triggerAlert();
+      if (onOrderCancelled) onOrderCancelled(payload);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [riderId]);
+
+  return { socket: socketRef.current, isConnected };
+}    
