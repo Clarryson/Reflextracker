@@ -141,7 +141,7 @@ export default function App() {
 
 const styles = {
   appRoot: {
-    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontFamily: '"Inter", Arial, Helvetica, sans-serif',
     backgroundColor: '#090d16',
     minHeight: '100vh',
     color: '#f8fafc',
