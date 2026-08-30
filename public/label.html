@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reflex — Official Shipping Package Label & QR Screen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --border: #1f2937;
+      --primary: #3b82f6;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --text: #f9fafb;
+      --text-dim: #9ca3af;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #1e293b 0%, #090d16 80%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    .top-bar {
+      width: 100%;
+      max-width: 650px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      background: rgba(17, 24, 39, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      backdrop-filter: blur(12px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 16px;
+      color: #60a5fa;
+      letter-spacing: -0.5px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    select, button {
+      font-family: inherit;
+      border-radius: 8px;
+      font-size: 13px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    select {
+      background: #1f2937;
+      color: white;
+      border: 1px solid #374151;
+      outline: none;
+    }
+
+    .btn {
+      font-weight: 600;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+
+    .btn-outline { background: #1f2937; color: #d1d5db; border-color: #374151; }
+    .btn-outline:hover { background: #374151; color: white; }
+
+    /* ─── Package Shipping Label Card ─── */
+    .label-card {
+      width: 100%;
+      max-width: 650px;
+      background: #ffffff;
+      color: #0f172a;
+      border-radius: 16px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Top Strip */
+    .label-header {
+      background: #0f172a;
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid #3b82f6;
+    }
+
+    .label-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .label-logo { font-size: 24px; }
+    .label-title { font-weight: 800; font-size: 18px; letter-spacing: -0.5px; }
+    .label-subtitle { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+    .badge-status {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-OPEN { background: #fef3c7; color: #92400e; }
+    .status-ASSIGNED { background: #e0e7ff; color: #3730a3; }
+    .status-PICKED_UP { background: #dbeafe; color: #1e40af; }
+    .status-DELIVERED { background: #d1fae5; color: #065f46; }
+    .status-CANCELLED { background: #fee2e2; color: #991b1b; }
+
+    /* Main Body */
+    .label-body {
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 20px;
+      background: #ffffff;
+    }
+
+    @media (max-width: 600px) {
+      .label-body { grid-template-columns: 1fr; }
+    }
+
+    .section-title {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+
+    .address-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .party-name { font-size: 15px; font-weight: 700; color: #0f172a; }
+    .party-detail { font-size: 13px; color: #475569; margin-top: 2px; line-height: 1.4; }
+
+    .ref-block {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: #f1f5f9;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .ref-label { font-size: 10px; color: #64748b; font-weight: 600; }
+    .ref-val { font-size: 15px; font-weight: 800; color: #0f172a; }
+
+    /* Right Column - QR Code Section */
+    .qr-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 2px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 16px;
+      background: #fafafa;
+      text-align: center;
+    }
+
+    .qr-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: #1e293b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    #qrcodeBox {
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+      display: inline-block;
+    }
+
+    .qr-instruction { font-size: 11px; font-weight: 600; color: #3b82f6; margin-top: 8px; }
+    .qr-subtext { font-size: 10px; color: #64748b; margin-top: 2px; }
+
+    /* Footer */
+    .label-footer {
+      border-top: 1px solid #e2e8f0;
+      padding: 16px 24px;
+      background: #f8fafc;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .item-highlight { font-weight: 700; color: #0f172a; }
+
+    /* Live Scanned Overlay */
+    .delivered-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(16, 185, 129, 0.92);
+      color: white;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      backdrop-filter: blur(4px);
+      z-index: 10;
+    }
+
+    /* Print */
+    @media print {
+      body { background: none; padding: 0; }
+      .top-bar, .no-print { display: none !important; }
+      .label-card { box-shadow: none; border: 2px solid #000; max-width: 100%; width: 100%; page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar no-print">
+    <div class="brand"><span>📦</span> Reflex Shipping Label</div>
+    <div class="controls">
+      <select id="deliveryPicker" onchange="onDeliverySelected(this.value)">
+        <option value="">Loading deliveries…</option>
+      </select>
+      <button class="btn btn-outline" onclick="window.print()">🖨️ Print</button>
+      <a href="/" class="btn btn-outline">🖥️ Dashboard</a>
+    </div>
+  </div>
+
+  <div class="label-card" id="labelCard">
+    <div class="delivered-overlay" id="deliveredOverlay">
+      <div style="font-size: 56px; margin-bottom: 8px;">✅</div>
+      <h2 style="font-size: 26px; font-weight: 800; margin-bottom: 4px;">PACKAGE DELIVERED</h2>
+      <p style="font-size: 14px; opacity: 0.95;" id="overlayDetail">Successfully verified & handed over.</p>
+      <div style="margin-top: 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(0,0,0,0.2); padding: 6px 14px; border-radius: 8px;" id="overlayTimestamp"></div>
+    </div>
+
+    <div class="label-header">
+      <div class="label-header-left">
+        <div class="label-logo">🚚</div>
+        <div>
+          <div class="label-title">REFLEX LOGISTICS</div>
+          <div class="label-subtitle">Express Delivery Waybill</div>
+        </div>
+      </div>
+      <div class="badge-status status-OPEN" id="lblStatus">OPEN</div>
+    </div>
+
+    <div class="label-body">
+      <div>
+        <div class="address-box">
+          <div class="section-title">FROM (Retailer)</div>
+          <div class="party-name" id="lblRetailer">ElectroShop Nairobi</div>
+          <div class="party-detail" id="lblRetailerContact">kamau@electronics.co.ke</div>
+        </div>
+
+        <div class="address-box">
+          <div class="section-title">DELIVER TO (Customer)</div>
+          <div class="party-name" id="lblCustomer">David Kamau</div>
+          <div class="party-detail" id="lblPhone">+254 712 345 678</div>
+          <div class="party-detail" id="lblAddress" style="font-weight: 600; color: #0f172a; margin-top: 4px;">
+            Moi Avenue, Nairobi CBD
+          </div>
+        </div>
+
+        <div class="ref-block">
+          <div class="ref-label">TRACKING REFERENCE</div>
+          <div class="ref-val" id="lblReference">REF-000000</div>
+        </div>
+      </div>
+
+      <div class="qr-column">
+        <div class="qr-title">📱 SCAN ON DELIVERY</div>
+        <div id="qrcodeBox"><div id="qrcode"></div></div>
+        <div class="qr-instruction">Point phone camera to verify</div>
+        <div class="qr-subtext">Rider scans to verify handover & capture proof</div>
+      </div>
+    </div>
+
+    <div class="label-footer">
+      <div><span style="color: #64748b;">Item: </span><span class="item-highlight" id="lblItem">Package</span></div>
+      <div><span style="color: #64748b;">Rider: </span><span class="item-highlight" id="lblRider">Unassigned</span></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = `${window.location.origin}/api`;
+    let deliveriesList = [];
+    let currentDelivery = null;
+    let cachedAuthToken = null;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    let targetDeliveryId = urlParams.get('id');
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await loadDeliveries();
+      setInterval(async () => {
+        if (currentDelivery) {
+          try {
+            const res = await fetch(`${API_BASE}/deliveries/${currentDelivery.id}`, {
+              headers: { 'Authorization': `Bearer ${cachedAuthToken}` }
+            });
+            const json = await res.json();
+            if (json.success && json.data?.delivery) {
+              const fresh = json.data.delivery;
+              if (fresh.status !== currentDelivery.status) renderDeliveryLabel(fresh);
+            }
+          } catch(e){}
+        }
+      }, 2500);
+    });
+
+    async function loadDeliveries() {
+      try {
+        if (!cachedAuthToken) {
+          const authRes = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'omondi@reflex.co.ke', password: 'Password123!' })
+          });
+          const authJson = await authRes.json();
+          cachedAuthToken = authJson.data?.token;
+        }
+
+        const res = await fetch(`${API_BASE}/deliveries`, {
+          headers: { 'Authorization': `Bearer ${cachedAuthToken}` }
+        });
+        const json = await res.json();
+
+        if (json.success && json.data?.deliveries) {
+          deliveriesList = json.data.deliveries;
+          populatePicker();
+
+          if (targetDeliveryId) {
+            const found = deliveriesList.find(d => String(d.id) === String(targetDeliveryId));
+            if (found) {
+              renderDeliveryLabel(found);
+              document.getElementById('deliveryPicker').value = found.id;
+              return;
+            }
+          }
+
+          if (deliveriesList.length > 0) {
+            renderDeliveryLabel(deliveriesList[0]);
+            document.getElementById('deliveryPicker').value = deliveriesList[0].id;
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function populatePicker() {
+      const picker = document.getElementById('deliveryPicker');
+      picker.innerHTML = deliveriesList.map(d => `
+        <option value="${d.id}">#${d.id} - ${d.reference} (${d.status}) - ${d.customerName}</option>
+      `).join('');
+    }
+
+    function onDeliverySelected(id) {
+      const found = deliveriesList.find(d => String(d.id) === String(id));
+      if (found) {
+        window.history.replaceState({}, '', `/label.html?id=${found.id}`);
+        renderDeliveryLabel(found);
+      }
+    }
+
+    function renderDeliveryLabel(d) {
+      currentDelivery = d;
+      document.getElementById('lblRetailer').textContent = d.retailerName || 'ElectroShop Nairobi';
+      document.getElementById('lblCustomer').textContent = d.customerName || 'Customer';
+      document.getElementById('lblPhone').textContent = d.customerPhone || '-';
+      document.getElementById('lblAddress').textContent = d.deliveryAddress || '-';
+      document.getElementById('lblReference').textContent = d.reference || `REF-${d.id}`;
+      document.getElementById('lblItem').textContent = d.itemDescription || 'Package Item';
+      document.getElementById('lblRider').textContent = d.riderName || 'Unassigned';
+
+      const badge = document.getElementById('lblStatus');
+      badge.textContent = d.status;
+      badge.className = `badge-status status-${d.status}`;
+
+      const overlay = document.getElementById('deliveredOverlay');
+      if (d.status === 'DELIVERED') {
+        overlay.style.display = 'flex';
+        document.getElementById('overlayDetail').textContent = `Package #${d.id} (${d.reference}) handed to ${d.customerName}`;
+        document.getElementById('overlayTimestamp').textContent = `Delivered: ${new Date().toLocaleTimeString()}`;
+      } else {
+        overlay.style.display = 'none';
+      }
+
+      const verifyUrl = `${window.location.origin}/verify.html?id=${d.id}&token=${encodeURIComponent(d.qrToken || '')}`;
+      const qrContainer = document.getElementById('qrcode');
+      qrContainer.innerHTML = '';
+
+      new QRCode(qrContainer, {
+        text: verifyUrl,
+        width: 170,
+        height: 170,
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+  </script>
+</body>
+</html>
