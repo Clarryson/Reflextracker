@@ -1,11 +1,14 @@
 {
   "name": "reflex-app",
   "version": "1.0.0",
-  "description": "",
+  "description": "REFLEX Delivery Tracking Platform",
   "main": "index.js",
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev": "npm --prefix apps/web run dev",
-    "build": "npm --prefix apps/web run build",
+    "build": "npm --prefix apps/web install && npm --prefix apps/web run build",
     "start": "npm --prefix apps/web run preview",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

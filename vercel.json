@@ -1,7 +1,7 @@
 {
+  "installCommand": "npm --prefix apps/web install",
   "buildCommand": "npm --prefix apps/web run build",
   "outputDirectory": "apps/web/dist",
-  "framework": "vite",
   "rewrites": [
     {
       "source": "/api-proxy/:path*",
