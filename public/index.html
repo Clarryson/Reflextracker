@@ -1,515 +1,475 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reflex - Delivery Coordination System</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; color: #333; }
-        header { text-align: center; margin-bottom: 20px; }
-        .nav-tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
-        .nav-tabs button { padding: 10px 20px; cursor: pointer; border: none; background: #ddd; font-weight: bold; border-radius: 5px; transition: 0.2s; }
-        .nav-tabs button.active { background: #007bff; color: white; }
-        
-        .view-panel { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 950px; margin: 0 auto; }
-        .view-panel.active { display: block; }
-        
-        .panel-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .panel-top h2, .panel-top h3 { margin: 0; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 13px; vertical-align: middle; }
-        th { background: #007bff; color: white; }
-        tr:hover td { background: #f9f9f9; }
-        
-        input, select { width: 100%; padding: 8px; margin: 4px 0 12px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
-        
-        button.action-btn { background: #28a745; color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; }
-        button.action-btn:hover { background: #218838; }
-        button.action-btn:disabled { background: #aaa; cursor: not-allowed; }
-        
-        .btn-sm { padding: 5px 9px; font-size: 11px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
-        .btn-blue { background: #007bff; color: white; }
-        .btn-blue:hover { background: #0069d9; }
-        .btn-green { background: #28a745; color: white; }
-        .btn-green:hover { background: #218838; }
-        .btn-purple { background: #6f42c1; color: white; }
-        .btn-purple:hover { background: #5a32a3; }
-        .btn-orange { background: #fd7e14; color: white; }
-        .btn-orange:hover { background: #e86805; }
-        .btn-gray { background: #6c757d; color: white; }
-        .btn-gray:hover { background: #5a6268; }
-        .btn-danger { background: #dc3545; color: white; }
-        .btn-danger:hover { background: #c82333; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Droplink — Logistics Control Plane</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        .btn-group { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+    body {
+      min-height: 100vh;
+      background-color: #090d16;
+      color: #f1f5f9;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      overflow-x: hidden;
+    }
 
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; text-transform: uppercase; }
-        .Pending, .OPEN { background: #ffc107; color: #000; }
-        .Assigned, .ASSIGNED { background: #17a2b8; color: white; }
-        .PickedUp, .PICKED_UP { background: #6f42c1; color: white; }
-        .Delivered, .DELIVERED { background: #28a745; color: white; }
-        .CANCELLED { background: #dc3545; color: white; }
+    /* ─── Navbar ─── */
+    .navbar {
+      height: 70px;
+      border-bottom: 1px solid #1e293b;
+      background-color: #0f172a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 32px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
 
-        /* Modal Styles */
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
-        .modal-content { background: white; border-radius: 8px; width: 100%; max-width: 500px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .modal-header h3 { margin: 0; }
-        .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; }
-    </style>
+    .navBrand { display: flex; alignItems: center; gap: 14px; }
+    .brandLogo { width: 36px; height: 36px; background-color: #38bdf8; color: #0f172a; font-weight: 900; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 18px; }
+    .brandTitle { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: 0.5px; color: #ffffff; }
+    .brandSubtitle { font-size: 11px; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+    
+    .navCenter { display: flex; justify-content: center; }
+    .segmentedControl { display: flex; background-color: #1e293b; padding: 4px; border-radius: 10px; border: 1px solid #334155; }
+    .segmentButton { padding: 8px 20px; border-radius: 8px; border: none; background: transparent; color: #94a3b8; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; font-family: inherit; }
+    .segmentButton.segmentActive { background-color: #38bdf8; color: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    
+    .navRight { display: flex; align-items: center; gap: 12px; }
+    .statusPill { display: flex; align-items: center; gap: 8px; background-color: #1e293b; padding: 6px 14px; border-radius: 20px; border: 1px solid #334155; }
+    .statusDot { width: 8px; height: 8px; border-radius: 50%; background-color: #10b981; }
+    .statusText { font-size: 12px; font-weight: 600; color: #cbd5e1; }
+
+    /* ─── Main Content ─── */
+    .mainContent { padding: 40px 32px; max-width: 1400px; margin: 0 auto; }
+    .gridDashboard { display: grid; grid-template-columns: 400px 1fr; gap: 32px; }
+
+    @media (max-width: 1024px) {
+      .gridDashboard { grid-template-columns: 1fr; }
+      .navbar { padding: 0 16px; }
+      .mainContent { padding: 24px 16px; }
+    }
+
+    .panel { background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 28px; height: fit-content; }
+    .panelHeader { margin-bottom: 24px; }
+    .panelTitle { margin: 0 0 6px 0; font-size: 18px; font-weight: 700; color: #ffffff; }
+    .panelDesc { margin: 0; font-size: 13px; color: #64748b; line-height: 1.4; }
+
+    /* Forms */
+    .form { display: flex; flex-direction: column; gap: 16px; }
+    .fieldGroup { display: flex; flex-direction: column; gap: 6px; }
+    .label { font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+    .input { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; color: #ffffff; font-size: 14px; outline: none; transition: border-color 0.2s; font-family: inherit; }
+    .input:focus { border-color: #38bdf8; }
+    .submitBtn { background-color: #38bdf8; color: #0f172a; border: none; border-radius: 8px; padding: 12px; font-weight: 700; font-size: 14px; cursor: pointer; transition: filter 0.2s; margin-top: 4px; font-family: inherit; }
+    .submitBtn:hover { filter: brightness(1.1); }
+    .submitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Feed Cards */
+    .feedList { display: flex; flex-direction: column; gap: 14px; max-height: 600px; overflow-y: auto; padding-right: 4px; }
+    .emptyState { text-align: center; padding: 48px 20px; border: 1px dashed #334155; border-radius: 12px; }
+    .emptyTitle { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #94a3b8; }
+    .emptySubtitle { margin: 0; font-size: 12px; color: #64748b; }
+
+    .dispatchCard { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; transition: all 0.2s ease; }
+    .dispatchCard:hover { border-color: #475569; }
+    .cardTopRow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .cardId { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px; color: #38bdf8; }
+
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+    .badge_OPEN { background-color: #fef08a22; color: #fde047; border: 1px solid #fef08a44; }
+    .badge_ASSIGNED { background-color: #818cf822; color: #a5b4fc; border: 1px solid #818cf844; }
+    .badge_PICKED_UP { background-color: #38bdf822; color: #38bdf8; border: 1px solid #38bdf844; }
+    .badge_DELIVERED { background-color: #10b98122; color: #34d399; border: 1px solid #10b98144; }
+    .badge_CANCELLED { background-color: #f43f5e22; color: #fb7185; border: 1px solid #f43f5e44; }
+
+    .cardDetails { display: flex; flex-direction: column; gap: 4px; }
+    .detailRow { margin: 0; font-size: 13px; color: #cbd5e1; }
+    .timestamp { margin: 4px 0 0 0; font-size: 11px; color: #64748b; display: flex; justify-content: space-between; align-items: center; }
+
+    /* Retailer Table */
+    .retailerContainer { display: flex; flex-direction: column; gap: 24px; }
+    .retailerTopBar { display: flex; justify-content: space-between; align-items: flex-end; }
+    .searchBox { background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px 16px; color: #ffffff; font-size: 14px; width: 340px; outline: none; font-family: inherit; }
+    .searchBox:focus { border-color: #38bdf8; }
+    .tableWrapper { background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; }
+    .table { width: 100%; border-collapse: collapse; text-align: left; }
+    .trHead { border-bottom: 1px solid #1e293b; background-color: #0f172a; }
+    .th { padding: 16px 24px; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .trBody { border-bottom: 1px solid #1e293b; transition: background-color 0.2s; }
+    .trBody:hover { background-color: rgba(255,255,255,0.02); }
+    .td { padding: 16px 24px; font-size: 14px; color: #cbd5e1; }
+    .emptyTd { padding: 60px; text-align: center; color: #64748b; font-style: italic; }
+
+    .btn-action { padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: 6px; border: 1px solid #334155; background: #1e293b; color: #38bdf8; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+    .btn-action:hover { background: #38bdf8; color: #0f172a; }
+  </style>
 </head>
 <body>
 
-    <header>
-        <h1>⚡ Reflex Delivery System</h1>
-        <p>Live Nairobi Retail Coordination Dashboard</p>
-    </header>
-
-    <div class="nav-tabs">
-        <button onclick="switchView('retailer')" class="active" id="btn-retailer">🛍️ Retailer Portal</button>
-        <button onclick="switchView('dispatcher')" id="btn-dispatcher">🎛️ Dispatcher Panel</button>
-        <button onclick="switchView('rider')" id="btn-rider">🏍️ Rider App View</button>
+  <!-- ─── Navbar ─── -->
+  <header class="navbar">
+    <div class="navBrand">
+      <div class="brandLogo">D</div>
+      <div>
+        <h1 class="brandTitle">Droplink</h1>
+        <span class="brandSubtitle">Logistics Control Plane</span>
+      </div>
     </div>
 
-    <!-- ─── Retailer Portal ─── -->
-    <div id="retailer" class="view-panel active">
-        <h2>📦 Log a New Delivery Request</h2>
-        <form id="delivery-form" onsubmit="handleCreateDelivery(event)">
-            <label>Shop Name:</label>
-            <input type="text" id="retailer-name" value="ElectroShop Nairobi" required>
-            
-            <label>Customer Name:</label>
-            <input type="text" id="customer-name" placeholder="e.g., David Kamau" value="David Kamau" required>
-            
-            <label>Customer Phone:</label>
-            <input type="text" id="customer-phone" placeholder="e.g., 0712345678" value="0712345678" required>
-            
-            <label>Delivery Address:</label>
-            <input type="text" id="address" placeholder="e.g., Moi Avenue, Nairobi CBD" value="Moi Avenue, Nairobi CBD" required>
-            
-            <label>Item Description:</label>
-            <input type="text" id="item" placeholder="e.g., Bluetooth Speaker" value="Bluetooth Speaker" required>
-            
-            <button type="submit" class="action-btn" id="btn-submit">Submit Request</button>
+    <div class="navCenter">
+      <div class="segmentedControl">
+        <button class="segmentButton segmentActive" id="btnTabDispatcher" onclick="switchTab('dispatcher')">
+          Dispatcher View
+        </button>
+        <button class="segmentButton" id="btnTabRetailer" onclick="switchTab('retailer')">
+          Retailer Portal
+        </button>
+      </div>
+    </div>
+
+    <div class="navRight">
+      <a href="/label.html" target="_blank" class="btn-action">🏷️ Shipping Labels ↗</a>
+      <div class="statusPill">
+        <span class="statusDot"></span>
+        <span class="statusText">Connected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── Main View ─── -->
+  <main class="mainContent">
+
+    <!-- DISPATCHER VIEW -->
+    <div id="dispatcherTab" class="gridDashboard">
+      <!-- Left Form Card -->
+      <div class="panel">
+        <div class="panelHeader">
+          <h2 class="panelTitle">New Dispatch Order</h2>
+          <p class="panelDesc">Route a package directly to the nearest active rider node.</p>
+        </div>
+
+        <form onsubmit="handleDispatch(event)" class="form">
+          <div class="fieldGroup">
+            <label class="label">Recipient Name</label>
+            <input 
+              id="inpCustomerName"
+              class="input"
+              value="Amina Wanjiru"
+              placeholder="e.g. Amina Wanjiru"
+              required
+            />
+          </div>
+
+          <div class="fieldGroup">
+            <label class="label">Phone Number</label>
+            <input 
+              id="inpPhone"
+              class="input"
+              value="0712345678"
+              placeholder="e.g. 0712345678"
+              required
+            />
+          </div>
+
+          <div class="fieldGroup">
+            <label class="label">Package / Item Details</label>
+            <input 
+              id="inpItemDesc"
+              class="input"
+              value="Fragrance Gift Set (50ml)"
+              placeholder="e.g. Fragrance Gift Set (50ml)"
+              required
+            />
+          </div>
+
+          <div class="fieldGroup">
+            <label class="label">Destination Address</label>
+            <input 
+              id="inpAddress"
+              class="input"
+              value="Bole Atlas, Addis Ababa"
+              placeholder="e.g. Bole Atlas, Addis Ababa"
+              required
+            />
+          </div>
+
+          <button type="submit" id="btnSubmitDispatch" class="submitBtn">
+            Dispatch Assignment →
+          </button>
         </form>
+      </div>
 
-        <div class="panel-top" style="margin-top: 25px;">
-            <h3>Active Shop Deliveries (<span id="retailer-count">0</span>)</h3>
-            <button onclick="fetchDeliveries()" class="btn-sm btn-gray">🔄 Refresh</button>
+      <!-- Right Live Feed -->
+      <div class="panel">
+        <div class="panelHeader">
+          <h2 class="panelTitle">Active Dispatches</h2>
+          <p class="panelDesc">Real-time telemetry and status synchronization.</p>
         </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Order #</th>
-                    <th>Item</th>
-                    <th>Customer</th>
-                    <th>Status</th>
-                    <th>Assigned Rider</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="retailer-table-body">
-                <tr><td colspan="6" style="text-align: center; color: #888;">Loading deliveries…</td></tr>
-            </tbody>
-        </table>
+
+        <div id="feedListContainer" class="feedList">
+          <div class="emptyState">
+            <p class="emptyTitle">No active dispatches</p>
+            <p class="emptySubtitle">Dispatched items will stream here instantly.</p>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- ─── Dispatcher Panel ─── -->
-    <div id="dispatcher" class="view-panel">
-        <div class="panel-top">
-            <h2>🎛️ Dispatcher Assignment Dashboard</h2>
-            <button onclick="fetchDeliveries()" class="btn-sm btn-gray">🔄 Refresh</button>
+    <!-- RETAILER PORTAL VIEW -->
+    <div id="retailerTab" style="display: none;" class="retailerContainer">
+      <div class="retailerTopBar">
+        <div>
+          <h2 class="panelTitle">Retailer Delivery Ledger</h2>
+          <p class="panelDesc">Audit trail and status tracking for enterprise retail partners.</p>
         </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Order #</th>
-                    <th>Shop</th>
-                    <th>Item & Address</th>
-                    <th>Status</th>
-                    <th>Assign Rider</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="dispatcher-table-body">
-                <tr><td colspan="6" style="text-align: center; color: #888;">Loading deliveries…</td></tr>
-            </tbody>
+        <input 
+          id="inpSearch"
+          class="searchBox"
+          placeholder="Filter by Order ID, Customer, or Item..."
+          oninput="renderLedger()"
+        />
+      </div>
+
+      <div class="tableWrapper">
+        <table class="table">
+          <thead>
+            <tr class="trHead">
+              <th class="th">Order Identifier</th>
+              <th class="th">Customer</th>
+              <th class="th">Phone</th>
+              <th class="th">Package Details</th>
+              <th class="th">Destination Node</th>
+              <th class="th">Assigned Rider</th>
+              <th class="th">Status</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr>
+              <td colspan="7" class="emptyTd">Loading records…</td>
+            </tr>
+          </tbody>
         </table>
+      </div>
     </div>
 
-    <!-- ─── Rider App View ─── -->
-    <div id="rider" class="view-panel">
-        <div class="panel-top">
-            <h2>🏍️ Rider Status Update Portal</h2>
-            <button onclick="fetchDeliveries()" class="btn-sm btn-gray">🔄 Refresh</button>
-        </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Order #</th>
-                    <th>Item & Shop</th>
-                    <th>Customer & Address</th>
-                    <th>Current Status</th>
-                    <th>Quick Actions</th>
-                    <th>QR / Proof</th>
-                </tr>
-            </thead>
-            <tbody id="rider-table-body">
-                <tr><td colspan="6" style="text-align: center; color: #888;">Loading deliveries…</td></tr>
-            </tbody>
-        </table>
-    </div>
+  </main>
 
-    <!-- ─── Proof Upload Modal ─── -->
-    <div class="modal" id="proofModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>📸 Upload Proof of Delivery</h3>
-                <button class="close-btn" onclick="closeProofModal()">✕</button>
+  <script>
+    const API_BASE = `${window.location.origin}/api`;
+    let activeTab = 'dispatcher';
+    let deliveries = [];
+    let riders = [];
+    let cachedToken = null;
+
+    // ─── Startup ───
+    window.addEventListener('DOMContentLoaded', async () => {
+      await fetchDeliveries();
+      setInterval(fetchDeliveries, 2500);
+    });
+
+    function switchTab(tab) {
+      activeTab = tab;
+      document.getElementById('btnTabDispatcher').classList.toggle('segmentActive', tab === 'dispatcher');
+      document.getElementById('btnTabRetailer').classList.toggle('segmentActive', tab === 'retailer');
+      document.getElementById('dispatcherTab').style.display = tab === 'dispatcher' ? 'grid' : 'none';
+      document.getElementById('retailerTab').style.display = tab === 'retailer' ? 'flex' : 'none';
+      renderView();
+    }
+
+    async function getToken() {
+      if (!cachedToken) {
+        try {
+          const res = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'omondi@reflex.co.ke', password: 'Password123!' })
+          });
+          const json = await res.json();
+          if (json.success) cachedToken = json.data.token;
+        } catch(e){}
+      }
+      return cachedToken;
+    }
+
+    async function fetchDeliveries() {
+      try {
+        const token = await getToken();
+        if (!token) return;
+
+        const [delivRes, riderRes] = await Promise.all([
+          fetch(`${API_BASE}/deliveries`, { headers: { 'Authorization': `Bearer ${token}` } }),
+          riders.length === 0 ? fetch(`${API_BASE}/riders`, { headers: { 'Authorization': `Bearer ${token}` } }) : Promise.resolve(null)
+        ]);
+
+        const delivJson = await delivRes.json();
+        if (delivJson.success && delivJson.data?.deliveries) {
+          deliveries = delivJson.data.deliveries;
+        }
+
+        if (riderRes) {
+          const riderJson = await riderRes.json();
+          if (riderJson.success && riderJson.data?.riders) {
+            riders = riderJson.data.riders;
+          }
+        }
+
+        renderView();
+      } catch (err) {
+        console.error('Fetch error:', err);
+      }
+    }
+
+    function renderView() {
+      if (activeTab === 'dispatcher') renderDispatcherFeed();
+      if (activeTab === 'retailer') renderLedger();
+    }
+
+    function renderDispatcherFeed() {
+      const container = document.getElementById('feedListContainer');
+      if (deliveries.length === 0) {
+        container.innerHTML = `
+          <div class="emptyState">
+            <p class="emptyTitle">No active dispatches</p>
+            <p class="emptySubtitle">Dispatched items will stream here instantly.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = deliveries.map(item => {
+        const riderOptions = riders.map(r => `
+          <option value="${r.id}" ${item.riderName === r.name ? 'selected' : ''}>${r.name}</option>
+        `).join('');
+
+        const timeStr = new Date(item.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        return `
+          <div class="dispatchCard">
+            <div class="cardTopRow">
+              <span class="cardId">${item.reference || '#' + item.id}</span>
+              <span class="badge badge_${item.status}">${item.status}</span>
             </div>
-            <p style="font-size: 13px; color: #666; margin-top: 0;">Upload recipient signature or package delivery photo to complete order.</p>
-            <input type="hidden" id="proofDeliveryId">
-            <input type="file" id="proofFileInput" accept="image/*,.pdf" style="margin-bottom: 15px;">
-            <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                <button type="button" class="btn-sm btn-gray" onclick="closeProofModal()">Cancel</button>
-                <button type="button" class="btn-sm btn-green" id="btnUploadProof" onclick="submitProofAndComplete()">Upload & Complete</button>
+            <div class="cardDetails">
+              <p class="detailRow"><strong>Recipient:</strong> ${item.customerName} (${item.customerPhone})</p>
+              <p class="detailRow"><strong>Item:</strong> ${item.itemDescription}</p>
+              <p class="detailRow"><strong>Location:</strong> ${item.deliveryAddress}</p>
+              <div style="margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <select onchange="assignRider(${item.id}, this.value)" style="background:#0f172a; border:1px solid #334155; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px;">
+                  <option value="">-- Assign Rider --</option>
+                  ${riderOptions}
+                </select>
+                <a href="/label.html?id=${item.id}" target="_blank" class="btn-action" style="font-size:11px;">🏷️ Label</a>
+              </div>
+              <p class="timestamp" style="margin-top:8px;">Dispatched at ${timeStr}</p>
             </div>
-        </div>
-    </div>
+          </div>
+        `;
+      }).join('');
+    }
 
-    <script>
-        const API_BASE = window.location.origin.includes('localhost:3000')
-            ? 'https://backend-production-7f0d0.up.railway.app/api'
-            : `${window.location.origin}/api`;
-        
-        const BASE_HOST = window.location.origin.includes('localhost:3000')
-            ? 'https://backend-production-7f0d0.up.railway.app'
-            : window.location.origin;
-        
-        let allDeliveries = [];
-        let allRiders = [];
-        let tokens = { dispatcher: null, retailer: null, rider: null };
+    function renderLedger() {
+      const search = (document.getElementById('inpSearch')?.value || '').toLowerCase();
+      const filtered = deliveries.filter(item => 
+        (item.customerName || '').toLowerCase().includes(search) ||
+        (item.reference || '').toLowerCase().includes(search) ||
+        (item.itemDescription || '').toLowerCase().includes(search) ||
+        (item.deliveryAddress || '').toLowerCase().includes(search)
+      );
 
-        function switchView(viewName) {
-            document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
-            document.getElementById(viewName).classList.add('active');
-            document.getElementById('btn-' + viewName).classList.add('active');
-        }
+      const tbody = document.getElementById('tableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="emptyTd">No records found matching criteria.</td></tr>';
+        return;
+      }
 
-        // ─── Background Authentication ───
-        async function getAuthToken(role = 'dispatcher') {
-            if (!tokens[role]) {
-                const creds = {
-                    dispatcher: { email: 'omondi@reflex.co.ke', password: 'Password123!' },
-                    retailer: { email: 'kamau@electronics.co.ke', password: 'Password123!' },
-                    rider: { email: 'brian@rider.co.ke', password: 'Password123!' }
-                };
-                try {
-                    const res = await fetch(`${API_BASE}/auth/login`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(creds[role])
-                    });
-                    const json = await res.json();
-                    if (json.success) tokens[role] = json.data.token;
-                } catch (e) {
-                    console.error('Auth error', e);
-                }
-            }
-            return tokens[role];
-        }
+      tbody.innerHTML = filtered.map(item => {
+        const timeStr = new Date(item.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `
+          <tr class="trBody">
+            <td class="td"><code>${item.reference || '#' + item.id}</code></td>
+            <td class="td"><strong>${item.customerName}</strong></td>
+            <td class="td">${item.customerPhone}</td>
+            <td class="td">${item.itemDescription}</td>
+            <td class="td">${item.deliveryAddress}</td>
+            <td class="td">${item.riderName || '<em style="color:#64748b">Unassigned</em>'}</td>
+            <td class="td">
+              <span class="badge badge_${item.status}">
+                ${item.status}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
 
-        // ─── Fetch Deliveries & Riders ───
-        async function fetchDeliveries() {
-            try {
-                const token = await getAuthToken('dispatcher');
-                if (!token) return;
+    async function handleDispatch(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnSubmitDispatch');
+      btn.disabled = true;
+      btn.textContent = 'Dispatching…';
 
-                const [delivRes, riderRes] = await Promise.all([
-                    fetch(`${API_BASE}/deliveries`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    }),
-                    allRiders.length === 0 ? fetch(`${API_BASE}/riders`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    }) : Promise.resolve(null)
-                ]);
+      const payload = {
+        customerName: document.getElementById('inpCustomerName').value,
+        customerPhone: document.getElementById('inpPhone').value,
+        itemDescription: document.getElementById('inpItemDesc').value,
+        deliveryAddress: document.getElementById('inpAddress').value
+      };
 
-                const delivJson = await delivRes.json();
-                if (delivJson.success && delivJson.data?.deliveries) {
-                    allDeliveries = delivJson.data.deliveries;
-                    document.getElementById('retailer-count').textContent = allDeliveries.length;
-                }
-
-                if (riderRes) {
-                    const riderJson = await riderRes.json();
-                    if (riderJson.success && riderJson.data?.riders) {
-                        allRiders = riderJson.data.riders;
-                    }
-                }
-
-                renderAllTables();
-            } catch (err) {
-                console.error('Fetch error:', err);
-            }
-        }
-
-        function formatStatus(status) {
-            if (status === 'OPEN') return 'Pending';
-            if (status === 'ASSIGNED') return 'Assigned';
-            if (status === 'PICKED_UP') return 'Picked Up';
-            if (status === 'DELIVERED') return 'Delivered';
-            return status;
-        }
-
-        function renderAllTables() {
-            const retailerTbody = document.getElementById('retailer-table-body');
-            const dispatcherTbody = document.getElementById('dispatcher-table-body');
-            const riderTbody = document.getElementById('rider-table-body');
-
-            retailerTbody.innerHTML = '';
-            dispatcherTbody.innerHTML = '';
-            riderTbody.innerHTML = '';
-
-            if (allDeliveries.length === 0) {
-                const empty = '<tr><td colspan="6" style="text-align: center; color: #888;">No deliveries found. Submit one above!</td></tr>';
-                retailerTbody.innerHTML = empty;
-                dispatcherTbody.innerHTML = empty;
-                riderTbody.innerHTML = empty;
-                return;
-            }
-
-            allDeliveries.forEach(d => {
-                const displayStatus = formatStatus(d.status);
-                const labelUrl = `${BASE_HOST}/label.html?id=${d.id}`;
-                const verifyUrl = `${BASE_HOST}/verify.html?id=${d.id}&token=${encodeURIComponent(d.qrToken || '')}`;
-
-                // 1. Retailer Table Row
-                retailerTbody.innerHTML += `<tr>
-                    <td><b>${d.reference || '#' + d.id}</b></td>
-                    <td>${d.itemDescription}</td>
-                    <td>${d.customerName}<br><small style="color:#666;">${d.customerPhone}</small></td>
-                    <td><span class="badge ${d.status} ${displayStatus.replace(' ', '')}">${displayStatus}</span></td>
-                    <td>${d.riderName || '<em>Unassigned</em>'}</td>
-                    <td>
-                        <div class="btn-group">
-                            <a href="${labelUrl}" target="_blank" class="btn-sm btn-blue">🏷️ Shipping Label</a>
-                            <a href="${verifyUrl}" target="_blank" class="btn-sm btn-purple">📱 QR Code</a>
-                        </div>
-                    </td>
-                </tr>`;
-
-                // 2. Dispatcher Table Row
-                const riderOptions = allRiders.map(r => `
-                    <option value="${r.id}" ${d.riderName === r.name ? 'selected' : ''}>${r.name}</option>
-                `).join('');
-
-                dispatcherTbody.innerHTML += `<tr>
-                    <td><b>${d.reference || '#' + d.id}</b></td>
-                    <td>${d.retailerName || 'ElectroShop Nairobi'}</td>
-                    <td><b>${d.itemDescription}</b><br><small style="color:#666;">📍 ${d.deliveryAddress}</small></td>
-                    <td><span class="badge ${d.status} ${displayStatus.replace(' ', '')}">${displayStatus}</span></td>
-                    <td>
-                        <select onchange="assignRider(${d.id}, this.value)" style="margin:0; padding:6px; font-size:12px;">
-                            <option value="">-- Assign Rider --</option>
-                            ${riderOptions}
-                        </select>
-                    </td>
-                    <td>
-                        <div class="btn-group">
-                            <a href="${labelUrl}" target="_blank" class="btn-sm btn-blue">🏷️ Label</a>
-                            <a href="${verifyUrl}" target="_blank" class="btn-sm btn-purple">📱 QR</a>
-                        </div>
-                    </td>
-                </tr>`;
-
-                // 3. Rider Table Row with Action Buttons
-                let riderActionsHtml = '';
-                if (d.status === 'ASSIGNED') {
-                    riderActionsHtml = `<button class="btn-sm btn-purple" onclick="confirmPickup(${d.id})">📦 Confirm Pickup</button>`;
-                } else if (d.status === 'PICKED_UP') {
-                    riderActionsHtml = `
-                        <button class="btn-sm btn-green" onclick="openProofModal(${d.id})">📸 Complete Delivery</button>
-                        <button class="btn-sm btn-orange" onclick="quickComplete(${d.id})">⚡ Quick Finish</button>
-                    `;
-                } else if (d.status === 'DELIVERED') {
-                    riderActionsHtml = `<span style="color:#28a745; font-weight:bold; font-size:12px;">✅ Delivered</span>`;
-                } else {
-                    riderActionsHtml = `<span style="color:#856404; font-size:12px;">Waiting Assignment</span>`;
-                }
-
-                riderTbody.innerHTML += `<tr>
-                    <td><b>${d.reference || '#' + d.id}</b></td>
-                    <td><b>${d.itemDescription}</b><br><small style="color:#666;">From: ${d.retailerName || 'Shop'}</small></td>
-                    <td>${d.customerName}<br><small style="color:#666;">📍 ${d.deliveryAddress}</small></td>
-                    <td><span class="badge ${d.status} ${displayStatus.replace(' ', '')}">${displayStatus}</span></td>
-                    <td>
-                        <div class="btn-group">
-                            ${riderActionsHtml}
-                        </div>
-                    </td>
-                    <td>
-                        <a href="${verifyUrl}" target="_blank" class="btn-sm btn-purple">📱 Scan QR Portal</a>
-                    </td>
-                </tr>`;
-            });
-        }
-
-        // ─── Retailer: Submit Delivery Request ───
-        async function handleCreateDelivery(e) {
-            e.preventDefault();
-            const btn = document.getElementById('btn-submit');
-            btn.disabled = true;
-            btn.textContent = 'Submitting…';
-
-            const payload = {
-                customerName: document.getElementById('customer-name').value,
-                customerPhone: document.getElementById('customer-phone').value || '0712345678',
-                deliveryAddress: document.getElementById('address').value,
-                itemDescription: document.getElementById('item').value
-            };
-
-            try {
-                const token = await getAuthToken('retailer');
-                const res = await fetch(`${API_BASE}/deliveries`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify(payload)
-                });
-                const json = await res.json();
-                if (json.success) {
-                    document.getElementById('item').value = '';
-                    await fetchDeliveries();
-                } else {
-                    alert('Error: ' + json.message);
-                }
-            } catch (err) {
-                console.error(err);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Submit Request';
-            }
-        }
-
-        // ─── Dispatcher: Assign Rider ───
-        async function assignRider(id, riderId) {
-            if (!riderId) return;
-            try {
-                const token = await getAuthToken('dispatcher');
-                const res = await fetch(`${API_BASE}/deliveries/${id}/assign`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ riderId: parseInt(riderId, 10) })
-                });
-                const json = await res.json();
-                if (json.success) {
-                    await fetchDeliveries();
-                } else {
-                    alert('Assign failed: ' + json.message);
-                }
-            } catch (err) {
-                console.error(err);
-            }
-        }
-
-        // ─── Rider: Confirm Pickup ───
-        async function confirmPickup(id) {
-            try {
-                const token = await getAuthToken('rider');
-                const res = await fetch(`${API_BASE}/deliveries/${id}/pickup`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const json = await res.json();
-                if (json.success) {
-                    await fetchDeliveries();
-                } else {
-                    alert('Pickup error: ' + json.message);
-                }
-            } catch (err) {
-                console.error(err);
-            }
-        }
-
-        // ─── Rider: Quick Finish / Complete ───
-        async function quickComplete(id) {
-            if (!confirm('Mark delivery as completed?')) return;
-            try {
-                const token = await getAuthToken('rider');
-                const res = await fetch(`${API_BASE}/deliveries/${id}/complete`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const json = await res.json();
-                if (json.success) {
-                    await fetchDeliveries();
-                } else {
-                    alert('Complete error: ' + json.message);
-                }
-            } catch (err) {
-                console.error(err);
-            }
-        }
-
-        // ─── Proof Upload Modal Handlers ───
-        function openProofModal(id) {
-            document.getElementById('proofDeliveryId').value = id;
-            document.getElementById('proofFileInput').value = '';
-            document.getElementById('proofModal').style.display = 'flex';
-        }
-
-        function closeProofModal() {
-            document.getElementById('proofModal').style.display = 'none';
-        }
-
-        async function submitProofAndComplete() {
-            const id = document.getElementById('proofDeliveryId').value;
-            const fileInput = document.getElementById('proofFileInput');
-            const file = fileInput.files[0];
-            const token = await getAuthToken('rider');
-            const btn = document.getElementById('btnUploadProof');
-            btn.disabled = true;
-            btn.textContent = 'Uploading…';
-
-            try {
-                if (file) {
-                    const formData = new FormData();
-                    formData.append('proof', file);
-                    await fetch(`${API_BASE}/deliveries/${id}/proof`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}` },
-                        body: formData
-                    });
-                }
-
-                // Mark complete
-                await fetch(`${API_BASE}/deliveries/${id}/complete`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                closeProofModal();
-                await fetchDeliveries();
-            } catch (err) {
-                alert('Upload error: ' + err.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Upload & Complete';
-            }
-        }
-
-        // ─── Auto-sync polling every 2.5 seconds ───
-        window.addEventListener('DOMContentLoaded', () => {
-            fetchDeliveries();
-            setInterval(fetchDeliveries, 2500);
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_BASE}/deliveries`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
         });
-    </script>
+        const json = await res.json();
+        if (json.success) {
+          document.getElementById('inpItemDesc').value = '';
+          await fetchDeliveries();
+        } else {
+          alert('Dispatch failed: ' + json.message);
+        }
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Dispatch Assignment →';
+      }
+    }
+
+    async function assignRider(id, riderId) {
+      if (!riderId) return;
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_BASE}/deliveries/${id}/assign`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ riderId: parseInt(riderId, 10) })
+        });
+        const json = await res.json();
+        if (json.success) {
+          await fetchDeliveries();
+        } else {
+          alert('Assignment error: ' + json.message);
+        }
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      }
+    }
+  </script>
 </body>
 </html>
