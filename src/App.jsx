@@ -6,6 +6,47 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://backend-productio
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://backend-production-7f0d0.up.railway.app';
 const LOCAL_HOST_IP = '192.168.2.101'; // Local Wi-Fi IP for seamless phone camera scanning
 
+// Nairobi Delivery Zones & Estimation Logic
+export const NAIROBI_ZONES = [
+  'Westlands',
+  'CBD',
+  'Kilimani',
+  'Lavington',
+  'Karen',
+  'Parklands',
+  'Eastleigh',
+  'Embakasi'
+];
+
+export const PRIORITY_LEVELS = ['Normal', 'High', 'Urgent'];
+
+export const ZONE_BASE_FEES = {
+  Westlands: 250,
+  CBD: 200,
+  Kilimani: 250,
+  Parklands: 250,
+  Lavington: 300,
+  Eastleigh: 300,
+  Karen: 450,
+  Embakasi: 400
+};
+
+export const ESTIMATED_TIMES = {
+  Westlands: { Normal: '45–60 mins', High: '30–45 mins', Urgent: '20–30 mins' },
+  CBD: { Normal: '30–45 mins', High: '25–35 mins', Urgent: '15–25 mins' },
+  Kilimani: { Normal: '40–55 mins', High: '30–40 mins', Urgent: '20–30 mins' },
+  Parklands: { Normal: '40–55 mins', High: '30–40 mins', Urgent: '20–30 mins' },
+  Lavington: { Normal: '45–60 mins', High: '35–45 mins', Urgent: '25–35 mins' },
+  Eastleigh: { Normal: '50–70 mins', High: '40–55 mins', Urgent: '30–40 mins' },
+  Karen: { Normal: '60–90 mins', High: '45–65 mins', Urgent: '35–50 mins' },
+  Embakasi: { Normal: '60–85 mins', High: '50–65 mins', Urgent: '35–50 mins' }
+};
+
+export const getEstimatedDeliveryTime = (zone, priority) => {
+  const zoneTimes = ESTIMATED_TIMES[zone] || ESTIMATED_TIMES.Westlands;
+  return zoneTimes[priority] || zoneTimes.Normal || '45–60 mins';
+};
+
 export default function App() {
   // ─── 0. Check URL for Mobile Phone QR Scan Redirection ───
   const urlParams = new URLSearchParams(window.location.search);
@@ -30,7 +71,25 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
 
-  // Retailer / Order Form State
+  // Retailer "New Delivery Request" Form State
+  const [formData, setFormData] = useState({
+    customerName: 'John',
+    customerPhone: '0712345678',
+    zone: 'Westlands',
+    priority: 'Normal',
+    address: 'Delta Corner Tower, 4th Floor, Westlands, Nairobi',
+    itemDescription: 'Laptop - HP ProBook 450 G8',
+    reference: 'ORD-20465',
+    packageValue: '35000',
+    deliveryFee: '250',
+    riderNotes: 'Handle with care, fragile electronics. Call upon reaching reception.'
+  });
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
+  const [createdDeliverySlip, setCreatedDeliverySlip] = useState(null);
+  const [isNewDeliveryModalOpen, setIsNewDeliveryModalOpen] = useState(false);
+
+  // Legacy fallback state for compatibility
   const [customerName, setCustomerName] = useState('John');
   const [phone, setPhone] = useState('0712345678');
   const [itemDescription, setItemDescription] = useState('Laptop');
@@ -303,7 +362,156 @@ export default function App() {
     };
   }, [fetchDeliveries, fetchRiders]);
 
-  // ─── Dispatcher: Create Delivery Order (Railway REST) ───
+  // ─── Retailer: Form Validation & Field Change Handlers ───
+  const validateField = (field, value) => {
+    let error = '';
+    if (field === 'customerName' && (!value || !value.trim())) {
+      error = 'Customer name is required';
+    }
+    if (field === 'customerPhone') {
+      const p = (value || '').trim();
+      if (!p) {
+        error = 'Phone number is required';
+      } else {
+        const phoneRegex = /^(\+?254|0)?[17]\d{8}$/;
+        const digits = p.replace(/\D/g, '');
+        if (!phoneRegex.test(p) && (digits.length < 9 || digits.length > 12)) {
+          error = 'Enter a valid Kenyan phone number (e.g. +254712345678 or 0712345678)';
+        }
+      }
+    }
+    if (field === 'zone' && (!value || !value.trim())) {
+      error = 'Delivery zone is required';
+    }
+    if (field === 'address' && (!value || !value.trim())) {
+      error = 'Specific delivery address & landmarks are required';
+    }
+    if (field === 'itemDescription' && (!value || !value.trim())) {
+      error = 'Item description is required';
+    }
+    if (field === 'packageValue' && value !== '' && value !== undefined) {
+      if (isNaN(Number(value)) || Number(value) < 0) {
+        error = 'Package value must be a non-negative number';
+      }
+    }
+    if (field === 'deliveryFee' && value !== '' && value !== undefined) {
+      if (isNaN(Number(value)) || Number(value) < 0) {
+        error = 'Delivery fee must be a non-negative number';
+      }
+    }
+    return error;
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'zone' || field === 'priority') {
+        const targetZone = field === 'zone' ? value : prev.zone;
+        const targetPriority = field === 'priority' ? value : prev.priority;
+        const baseFee = ZONE_BASE_FEES[targetZone] || 250;
+        const surcharge = targetPriority === 'Urgent' ? 100 : targetPriority === 'High' ? 50 : 0;
+        updated.deliveryFee = String(baseFee + surcharge);
+      }
+      return updated;
+    });
+
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    ['customerName', 'customerPhone', 'zone', 'address', 'itemDescription', 'packageValue', 'deliveryFee'].forEach(field => {
+      const err = validateField(field, formData[field]);
+      if (err) errors[field] = err;
+    });
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateDeliveryRequest = async (e) => {
+    if (e) e.preventDefault();
+    if (!validateForm()) {
+      showNotification('⚠️ Please complete all required fields with valid details');
+      return;
+    }
+
+    setIsSubmittingDelivery(true);
+    try {
+      const token = await getAuthToken('retailer');
+      const fullAddress = `${formData.address.trim()} (${formData.zone})`;
+      
+      const payload = {
+        customerName: formData.customerName.trim(),
+        customerPhone: formData.customerPhone.trim(),
+        deliveryAddress: fullAddress,
+        itemDescription: formData.itemDescription.trim(),
+        zone: formData.zone,
+        priority: formData.priority,
+        reference: formData.reference.trim() || undefined,
+        packageValue: formData.packageValue ? Number(formData.packageValue) : undefined,
+        deliveryFee: formData.deliveryFee ? Number(formData.deliveryFee) : undefined,
+        riderNotes: formData.riderNotes.trim() || undefined,
+      };
+
+      const res = await fetch(`${API_BASE}/deliveries`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (data.success && data.data?.delivery) {
+        const created = data.data.delivery;
+        const qrSlipData = {
+          ...created,
+          customerName: formData.customerName,
+          customerPhone: formData.customerPhone,
+          deliveryAddress: fullAddress,
+          zone: formData.zone,
+          priority: formData.priority,
+          itemDescription: formData.itemDescription,
+          reference: created.reference || formData.reference || `DEL-${created.id}`,
+          packageValue: formData.packageValue,
+          deliveryFee: formData.deliveryFee,
+          riderNotes: formData.riderNotes,
+          estimatedTime: getEstimatedDeliveryTime(formData.zone, formData.priority),
+          qrToken: created.qrToken || `REFLEX-${created.reference || created.id}-${Date.now().toString(36).toUpperCase()}`
+        };
+
+        setCreatedDeliverySlip(qrSlipData);
+        showNotification(`✅ Delivery created! Waybill #${qrSlipData.reference} is now 📦 OPEN in database`);
+        await fetchDeliveries();
+
+        // Reset form
+        setFormData({
+          customerName: '',
+          customerPhone: '',
+          zone: 'Westlands',
+          priority: 'Normal',
+          address: '',
+          itemDescription: '',
+          reference: '',
+          packageValue: '',
+          deliveryFee: '250',
+          riderNotes: ''
+        });
+        setFormErrors({});
+      } else {
+        showNotification(`⚠️ ${data.message || 'Failed to create delivery on server'}`);
+      }
+    } catch (err) {
+      showNotification(`❌ Network error: ${err.message}`);
+    } finally {
+      setIsSubmittingDelivery(false);
+    }
+  };
+
+  // ─── Dispatcher: Create Delivery Order (Railway REST fallback) ───
   const handleCreateOrder = async (e) => {
     e.preventDefault();
     if (!customerName || !address || !phone || !itemDescription) return;
@@ -924,72 +1132,444 @@ export default function App() {
           </div>
         )}
 
-        {/* ── TAB 2: RETAILER PORTAL & CREATE DELIVERY ── */}
+        {/* ── TAB 2: RETAILER PORTAL & NEW DELIVERY REQUEST ── */}
         {activeTab === 'retailer' && (
-          <div style={styles.gridDashboard}>
-            {/* Left Order Creation Panel */}
-            <div style={styles.leftPanel}>
-              <div style={styles.panelHeader}>
-                <div style={styles.panelIconBadge}>🏪</div>
-                <div>
-                  <h2 style={styles.panelTitle}>Create Delivery</h2>
-                  <p style={styles.panelDesc}>Enter package &amp; recipient details. It instantly saves to Railway database as <strong>📦 OPEN</strong>.</p>
+          <div style={styles.retailerPortalWrapper}>
+            {/* Top Retailer Toolbar */}
+            <div style={styles.retailerToolbar}>
+              <div>
+                <h2 style={styles.retailerHubTitle}>🏪 Retailer Delivery Hub</h2>
+                <p style={styles.retailerHubDesc}>
+                  Create customer delivery dispatches, monitor real-time fulfillment, and generate verification QR slips.
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button
+                  style={styles.openNewDeliveryBtn}
+                  onClick={() => {
+                    const formEl = document.getElementById('new-delivery-request-form');
+                    if (formEl) {
+                      formEl.scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                      setIsNewDeliveryModalOpen(true);
+                    }
+                  }}
+                >
+                  ✨ + New Delivery Request
+                </button>
+              </div>
+            </div>
+
+            {/* ─── NEW DELIVERY REQUEST WORKBENCH ─── */}
+            <div id="new-delivery-request-form" style={styles.newDeliveryContainer}>
+              {/* Header */}
+              <div style={styles.newDeliveryHeader}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={styles.newDeliveryIconBadge}>📦</div>
+                  <div>
+                    <h2 style={styles.newDeliveryTitle}>New Delivery Request</h2>
+                    <div style={styles.zoneRoutingIndicator}>
+                      <span style={styles.zonePulseDot} />
+                      <span style={styles.zoneRoutingText}>
+                        Routing: Smart Auto-Zone ({formData.zone || 'Westlands'})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    style={styles.resetFormBtn}
+                    onClick={() => {
+                      setFormData({
+                        customerName: '',
+                        customerPhone: '',
+                        zone: 'Westlands',
+                        priority: 'Normal',
+                        address: '',
+                        itemDescription: '',
+                        reference: '',
+                        packageValue: '',
+                        deliveryFee: '250',
+                        riderNotes: ''
+                      });
+                      setFormErrors({});
+                      showNotification('Form cleared');
+                    }}
+                    title="Clear entered details"
+                  >
+                    🔄 Clear Form
+                  </button>
                 </div>
               </div>
 
-              <form onSubmit={handleCreateOrder} style={styles.form}>
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Customer Name</label>
-                  <input
-                    style={styles.input}
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="e.g. John / Amina Wanjiru"
-                    required
-                  />
-                </div>
+              {/* Main Content: Left Form & Right Live Delivery Summary */}
+              <div style={styles.newDeliveryLayout}>
+                {/* ─── LEFT: 10 FORM FIELDS ─── */}
+                <form onSubmit={handleCreateDeliveryRequest} style={styles.newDeliveryForm}>
+                  {/* Row 1: Customer Name & Phone */}
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Customer Name <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.customerName ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.customerName ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.customerName}
+                        onChange={(e) => handleInputChange('customerName', e.target.value)}
+                        placeholder="e.g. John / Amina Wanjiru"
+                      />
+                      {formErrors.customerName && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerName}</span>
+                      )}
+                    </div>
 
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Phone Number</label>
-                  <input
-                    style={styles.input}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="e.g. 0712345678"
-                    required
-                  />
-                </div>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Customer Phone Number <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.customerPhone ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.customerPhone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.customerPhone}
+                        onChange={(e) => handleInputChange('customerPhone', e.target.value)}
+                        placeholder="e.g. +254712345678 or 0712345678"
+                      />
+                      {formErrors.customerPhone && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerPhone}</span>
+                      )}
+                    </div>
+                  </div>
 
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Delivery Address</label>
-                  <input
-                    style={styles.input}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="e.g. Westlands, Nairobi"
-                    required
-                  />
-                </div>
+                  {/* Row 2: Delivery Zone & Priority */}
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Delivery Nairobi Zone <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <select
+                        style={{
+                          ...styles.fieldSelect,
+                          borderColor: formErrors.zone ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.zone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.zone}
+                        onChange={(e) => handleInputChange('zone', e.target.value)}
+                      >
+                        {NAIROBI_ZONES.map((z) => (
+                          <option key={z} value={z}>
+                            📍 {z} (Base KES {ZONE_BASE_FEES[z] || 250})
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.zone && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.zone}</span>
+                      )}
+                    </div>
 
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Package Description</label>
-                  <input
-                    style={styles.input}
-                    value={itemDescription}
-                    onChange={(e) => setItemDescription(e.target.value)}
-                    placeholder="e.g. Laptop 15-inch"
-                    required
-                  />
-                </div>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Priority Level</label>
+                      <select
+                        style={styles.fieldSelect}
+                        value={formData.priority}
+                        onChange={(e) => handleInputChange('priority', e.target.value)}
+                      >
+                        {PRIORITY_LEVELS.map((p) => (
+                          <option key={p} value={p}>
+                            {p === 'Urgent' ? '⚡ Urgent (+KES 100)' : p === 'High' ? '🔥 High (+KES 50)' : '📦 Normal Priority'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-                <button type="submit" style={styles.submitBtn} disabled={isSubmitting}>
-                  {isSubmitting ? 'Creating Delivery...' : '📦 Create Delivery'}
-                </button>
-              </form>
+                  {/* Row 3: Specific Address & Landmarks */}
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel}>
+                      Specific Delivery Address &amp; Landmarks <span style={styles.requiredAsterisk}>*</span>
+                    </label>
+                    <textarea
+                      style={{
+                        ...styles.fieldTextarea,
+                        borderColor: formErrors.address ? '#ef4444' : '#334155',
+                        backgroundColor: formErrors.address ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                      }}
+                      value={formData.address}
+                      onChange={(e) => handleInputChange('address', e.target.value)}
+                      placeholder="Building name, floor, apartment, landmark, street name..."
+                      rows={3}
+                    />
+                    {formErrors.address && (
+                      <span style={styles.fieldErrorText}>⚠️ {formErrors.address}</span>
+                    )}
+                  </div>
+
+                  {/* Row 4: Item Description & Internal Reference */}
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Item / Order Description <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.itemDescription ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.itemDescription ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.itemDescription}
+                        onChange={(e) => handleInputChange('itemDescription', e.target.value)}
+                        placeholder="e.g. Laptop - HP ProBook 450"
+                      />
+                      {formErrors.itemDescription && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.itemDescription}</span>
+                      )}
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Internal Reference # (Optional)</label>
+                      <input
+                        style={styles.fieldInput}
+                        value={formData.reference}
+                        onChange={(e) => handleInputChange('reference', e.target.value)}
+                        placeholder="e.g. ORD-20465"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 5: Package Value & Delivery Fee */}
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Package Value (KES)</label>
+                      <div style={styles.currencyInputContainer}>
+                        <span style={styles.currencyPrefixBadge}>KES</span>
+                        <input
+                          type="number"
+                          min="0"
+                          style={{
+                            ...styles.currencyInput,
+                            borderColor: formErrors.packageValue ? '#ef4444' : '#334155'
+                          }}
+                          value={formData.packageValue}
+                          onChange={(e) => handleInputChange('packageValue', e.target.value)}
+                          placeholder="e.g. 35000"
+                        />
+                      </div>
+                      {formErrors.packageValue && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.packageValue}</span>
+                      )}
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Delivery Fee (KES)</label>
+                      <div style={styles.currencyInputContainer}>
+                        <span style={styles.currencyPrefixBadge}>KES</span>
+                        <input
+                          type="number"
+                          min="0"
+                          style={{
+                            ...styles.currencyInput,
+                            borderColor: formErrors.deliveryFee ? '#ef4444' : '#334155'
+                          }}
+                          value={formData.deliveryFee}
+                          onChange={(e) => handleInputChange('deliveryFee', e.target.value)}
+                          placeholder="e.g. 250"
+                        />
+                      </div>
+                      {formErrors.deliveryFee && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.deliveryFee}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 6: Rider Handling Notes */}
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel}>Rider Handling Notes (Optional)</label>
+                    <textarea
+                      style={styles.fieldTextarea}
+                      value={formData.riderNotes}
+                      onChange={(e) => handleInputChange('riderNotes', e.target.value)}
+                      placeholder="Handle with care, fragile electronics. Call upon reaching gate..."
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Bottom Actions */}
+                  <div style={styles.formActionsRow}>
+                    <button
+                      type="button"
+                      style={styles.btnCancel}
+                      onClick={() => {
+                        setFormData({
+                          customerName: '',
+                          customerPhone: '',
+                          zone: 'Westlands',
+                          priority: 'Normal',
+                          address: '',
+                          itemDescription: '',
+                          reference: '',
+                          packageValue: '',
+                          deliveryFee: '250',
+                          riderNotes: ''
+                        });
+                        setFormErrors({});
+                      }}
+                      disabled={isSubmittingDelivery}
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="submit"
+                      style={{
+                        ...styles.btnSubmitGreen,
+                        opacity: isSubmittingDelivery ? 0.7 : 1,
+                        cursor: isSubmittingDelivery ? 'not-allowed' : 'pointer'
+                      }}
+                      disabled={isSubmittingDelivery}
+                    >
+                      {isSubmittingDelivery ? 'Creating Delivery...' : '🚀 Submit & Generate QR Slip'}
+                    </button>
+                  </div>
+                </form>
+
+                {/* ─── RIGHT: LIVE DELIVERY SUMMARY PANEL ─── */}
+                <div style={styles.summaryCard}>
+                  <div style={styles.summaryCardHeader}>
+                    <div>
+                      <span style={styles.summarySubTag}>REAL-TIME PREVIEW</span>
+                      <h3 style={styles.summaryHeading}>Delivery Summary</h3>
+                    </div>
+                    <span style={styles.summaryLiveTag}>● Live</span>
+                  </div>
+
+                  <div style={styles.summaryBody}>
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Customer</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.customerName.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Phone</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.customerPhone.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Zone</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.zone ? `📍 ${formData.zone}` : <em style={styles.emptyPlaceholder}>Not selected</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Address</span>
+                      <span style={styles.summaryValueMultiline}>
+                        {formData.address.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </span>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Item / Description</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.itemDescription.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryDivider} />
+
+                    <div style={styles.summaryRowInline}>
+                      <div>
+                        <span style={styles.summaryLabel}>Priority</span>
+                        <div style={{ marginTop: '2px' }}>
+                          <span
+                            style={{
+                              ...styles.summaryPriorityBadge,
+                              backgroundColor:
+                                formData.priority === 'Urgent'
+                                  ? 'rgba(239, 68, 68, 0.2)'
+                                  : formData.priority === 'High'
+                                  ? 'rgba(245, 158, 11, 0.2)'
+                                  : 'rgba(34, 197, 94, 0.2)',
+                              color:
+                                formData.priority === 'Urgent'
+                                  ? '#f87171'
+                                  : formData.priority === 'High'
+                                  ? '#fbbf24'
+                                  : '#4ade80',
+                              borderColor:
+                                formData.priority === 'Urgent'
+                                  ? '#ef4444'
+                                  : formData.priority === 'High'
+                                  ? '#f59e0b'
+                                  : '#22c55e'
+                            }}
+                          >
+                            {formData.priority === 'Urgent' ? '⚡ Urgent' : formData.priority === 'High' ? '🔥 High' : '📦 Normal'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span style={styles.summaryLabel}>Package Value</span>
+                        <strong style={styles.summaryValueHighlight}>
+                          {formData.packageValue
+                            ? `KES ${Number(formData.packageValue).toLocaleString()}`
+                            : <em style={styles.emptyPlaceholder}>Not provided</em>}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div style={styles.summaryDivider} />
+
+                    <div style={styles.summaryRowInline}>
+                      <div>
+                        <span style={styles.summaryLabel}>Delivery Fee</span>
+                        <strong style={styles.summaryFeeHighlight}>
+                          {formData.deliveryFee
+                            ? `KES ${Number(formData.deliveryFee).toLocaleString()}`
+                            : <em style={styles.emptyPlaceholder}>Not provided</em>}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span style={styles.summaryLabel}>Estimated Time</span>
+                        <div style={styles.summaryEtaBadge}>
+                          ⏱️ {getEstimatedDeliveryTime(formData.zone, formData.priority)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {formData.riderNotes && (
+                      <div style={styles.summaryNotesBlock}>
+                        <span style={styles.summaryLabel}>Handling Notes:</span>
+                        <p style={styles.summaryNotesText}>"{formData.riderNotes}"</p>
+                      </div>
+                    )}
+
+                    <div style={styles.autoRouteFeatureBox}>
+                      <span style={{ fontSize: '13px', color: '#22c55e' }}>✓</span>
+                      <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
+                        Automatic zone pricing &amp; immediate <strong>📦 OPEN</strong> database entry upon submission.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Right Retailer Live Ledger */}
-            <div style={styles.rightPanel}>
+            {/* ─── RETAILER LIVE AUDIT LEDGER ─── */}
+            <div style={styles.retailerLedgerCard}>
               <div style={styles.feedHeader}>
                 <div>
                   <h2 style={styles.panelTitle}>Enterprise Retailer Delivery Ledger &amp; Waybills ({filteredDeliveries.length})</h2>
@@ -1083,10 +1663,13 @@ export default function App() {
                             </span>
                           </td>
                           <td style={styles.td}>
-                            <button style={styles.viewRowBtn} onClick={(e) => {
-                              e.stopPropagation();
-                              setInspectedWaybill(item);
-                            }}>
+                            <button
+                              style={styles.viewRowBtn}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInspectedWaybill(item);
+                              }}
+                            >
                               📱 Show QR ↗
                             </button>
                           </td>
@@ -1599,6 +2182,422 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* 7. Generated QR Slip Modal (Shown immediately after Retailer submits) */}
+      {createdDeliverySlip && (
+        <div style={styles.modalOverlay} onClick={() => setCreatedDeliverySlip(null)}>
+          <div style={styles.qrSlipModalCard} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div>
+                <span style={styles.modalSubTag}>OFFICIAL DELIVERY WAYBILL SLIP</span>
+                <h3 style={styles.modalTitle}>📦 Waybill &amp; QR Slip Generated</h3>
+              </div>
+              <button onClick={() => setCreatedDeliverySlip(null)} style={styles.modalCloseBtn}>✕</button>
+            </div>
+
+            <div style={styles.modalBody}>
+              {/* Status Banner */}
+              <div style={styles.qrSlipStatusBanner}>
+                <span style={{ fontSize: '13px', fontWeight: '900', color: '#22c55e' }}>
+                  📦 STATUS: OPEN — RECORDED IN RAILWAY DATABASE
+                </span>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                  Ready for Dispatcher Fleet Rider Assignment
+                </span>
+              </div>
+
+              {/* Scannable QR Code Box */}
+              <div style={styles.qrSlipCodeContainer}>
+                <div style={styles.qrSlipCodeWhiteBox}>
+                  <QRCodeSVG
+                    value={getVerificationUrl(createdDeliverySlip)}
+                    size={160}
+                    level="H"
+                    includeMargin={false}
+                  />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <code style={{ fontSize: '13px', fontWeight: '900', color: '#38bdf8' }}>
+                    {createdDeliverySlip.reference || `DEL-#${createdDeliverySlip.id}`}
+                  </code>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '2px' }}>
+                    Scan QR token to verify handoff at delivery checkpoint
+                  </span>
+                </div>
+              </div>
+
+              {/* Waybill Breakdown Grid */}
+              <div style={styles.modalGrid}>
+                <div style={styles.modalBlock}>
+                  <span style={styles.modalLabel}>Customer Recipient</span>
+                  <strong style={styles.modalVal}>{createdDeliverySlip.customerName}</strong>
+                  <span style={styles.modalSubVal}>📞 {createdDeliverySlip.customerPhone}</span>
+                </div>
+
+                <div style={styles.modalBlock}>
+                  <span style={styles.modalLabel}>Delivery Zone &amp; Priority</span>
+                  <strong style={styles.modalVal}>📍 {createdDeliverySlip.zone || 'Westlands'}</strong>
+                  <span style={styles.modalSubVal}>Priority: {createdDeliverySlip.priority || 'Normal'}</span>
+                </div>
+              </div>
+
+              <div style={styles.modalBlock}>
+                <span style={styles.modalLabel}>Item Description</span>
+                <p style={styles.modalValText}>{createdDeliverySlip.itemDescription}</p>
+              </div>
+
+              <div style={styles.modalBlock}>
+                <span style={styles.modalLabel}>Destination Address</span>
+                <p style={styles.modalValText}>{createdDeliverySlip.deliveryAddress}</p>
+              </div>
+
+              <div style={styles.modalGrid}>
+                <div style={styles.modalBlock}>
+                  <span style={styles.modalLabel}>Package Value</span>
+                  <strong style={{ fontSize: '13px', color: '#fde047' }}>
+                    {createdDeliverySlip.packageValue ? `KES ${Number(createdDeliverySlip.packageValue).toLocaleString()}` : 'Not declared'}
+                  </strong>
+                </div>
+
+                <div style={styles.modalBlock}>
+                  <span style={styles.modalLabel}>Delivery Fee &amp; ETA</span>
+                  <strong style={{ fontSize: '13px', color: '#34d399' }}>
+                    KES {createdDeliverySlip.deliveryFee || '250'}
+                  </strong>
+                  <span style={{ fontSize: '11px', color: '#38bdf8' }}>
+                    ETA: {createdDeliverySlip.estimatedTime || '45–60 mins'}
+                  </span>
+                </div>
+              </div>
+
+              {createdDeliverySlip.riderNotes && (
+                <div style={styles.modalBlock}>
+                  <span style={styles.modalLabel}>Rider Handling Notes</span>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: '#cbd5e1', fontStyle: 'italic' }}>
+                    "{createdDeliverySlip.riderNotes}"
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div style={styles.qrSlipModalActions}>
+              <button
+                type="button"
+                style={styles.printSlipBtn}
+                onClick={() => window.print()}
+              >
+                🖨️ Print Delivery Slip
+              </button>
+
+              <button
+                type="button"
+                style={styles.doneSlipBtn}
+                onClick={() => {
+                  setCreatedDeliverySlip(null);
+                  const ledgerEl = document.querySelector('table');
+                  if (ledgerEl) ledgerEl.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                ✓ Done &amp; View in Ledger
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Full Modal Version of New Delivery Request (if opened via button) */}
+      {isNewDeliveryModalOpen && (
+        <div style={styles.modalOverlay} onClick={() => setIsNewDeliveryModalOpen(false)}>
+          <div style={{ ...styles.modalCard, maxWidth: '840px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={styles.newDeliveryIconBadge}>📦</div>
+                <div>
+                  <h3 style={styles.modalTitle}>New Delivery Request</h3>
+                  <div style={styles.zoneRoutingIndicator}>
+                    <span style={styles.zonePulseDot} />
+                    <span style={styles.zoneRoutingText}>
+                      Routing: Smart Auto-Zone ({formData.zone || 'Westlands'})
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setIsNewDeliveryModalOpen(false)} style={styles.modalCloseBtn}>✕</button>
+            </div>
+
+            <div style={{ ...styles.modalBody, maxHeight: '80vh', overflowY: 'auto' }}>
+              <div style={styles.newDeliveryLayout}>
+                {/* Form */}
+                <form
+                  onSubmit={async (e) => {
+                    await handleCreateDeliveryRequest(e);
+                    setIsNewDeliveryModalOpen(false);
+                  }}
+                  style={styles.newDeliveryForm}
+                >
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Customer Name <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.customerName ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.customerName ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.customerName}
+                        onChange={(e) => handleInputChange('customerName', e.target.value)}
+                        placeholder="e.g. John / Amina Wanjiru"
+                      />
+                      {formErrors.customerName && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerName}</span>
+                      )}
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Customer Phone Number <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.customerPhone ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.customerPhone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.customerPhone}
+                        onChange={(e) => handleInputChange('customerPhone', e.target.value)}
+                        placeholder="e.g. +254712345678 or 0712345678"
+                      />
+                      {formErrors.customerPhone && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerPhone}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Delivery Nairobi Zone <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <select
+                        style={{
+                          ...styles.fieldSelect,
+                          borderColor: formErrors.zone ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.zone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.zone}
+                        onChange={(e) => handleInputChange('zone', e.target.value)}
+                      >
+                        {NAIROBI_ZONES.map((z) => (
+                          <option key={z} value={z}>
+                            📍 {z} (Base KES {ZONE_BASE_FEES[z] || 250})
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.zone && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.zone}</span>
+                      )}
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Priority Level</label>
+                      <select
+                        style={styles.fieldSelect}
+                        value={formData.priority}
+                        onChange={(e) => handleInputChange('priority', e.target.value)}
+                      >
+                        {PRIORITY_LEVELS.map((p) => (
+                          <option key={p} value={p}>
+                            {p === 'Urgent' ? '⚡ Urgent (+KES 100)' : p === 'High' ? '🔥 High (+KES 50)' : '📦 Normal Priority'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel}>
+                      Specific Delivery Address &amp; Landmarks <span style={styles.requiredAsterisk}>*</span>
+                    </label>
+                    <textarea
+                      style={{
+                        ...styles.fieldTextarea,
+                        borderColor: formErrors.address ? '#ef4444' : '#334155',
+                        backgroundColor: formErrors.address ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                      }}
+                      value={formData.address}
+                      onChange={(e) => handleInputChange('address', e.target.value)}
+                      placeholder="Building name, floor, apartment, landmark, street name..."
+                      rows={2}
+                    />
+                    {formErrors.address && (
+                      <span style={styles.fieldErrorText}>⚠️ {formErrors.address}</span>
+                    )}
+                  </div>
+
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Item / Order Description <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.itemDescription ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.itemDescription ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.itemDescription}
+                        onChange={(e) => handleInputChange('itemDescription', e.target.value)}
+                        placeholder="e.g. Laptop - HP ProBook 450"
+                      />
+                      {formErrors.itemDescription && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.itemDescription}</span>
+                      )}
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Internal Reference # (Optional)</label>
+                      <input
+                        style={styles.fieldInput}
+                        value={formData.reference}
+                        onChange={(e) => handleInputChange('reference', e.target.value)}
+                        placeholder="e.g. ORD-20465"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Package Value (KES)</label>
+                      <div style={styles.currencyInputContainer}>
+                        <span style={styles.currencyPrefixBadge}>KES</span>
+                        <input
+                          type="number"
+                          min="0"
+                          style={styles.currencyInput}
+                          value={formData.packageValue}
+                          onChange={(e) => handleInputChange('packageValue', e.target.value)}
+                          placeholder="e.g. 35000"
+                        />
+                      </div>
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Delivery Fee (KES)</label>
+                      <div style={styles.currencyInputContainer}>
+                        <span style={styles.currencyPrefixBadge}>KES</span>
+                        <input
+                          type="number"
+                          min="0"
+                          style={styles.currencyInput}
+                          value={formData.deliveryFee}
+                          onChange={(e) => handleInputChange('deliveryFee', e.target.value)}
+                          placeholder="e.g. 250"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel}>Rider Handling Notes</label>
+                    <textarea
+                      style={styles.fieldTextarea}
+                      value={formData.riderNotes}
+                      onChange={(e) => handleInputChange('riderNotes', e.target.value)}
+                      placeholder="Handle with care, fragile electronics..."
+                      rows={2}
+                    />
+                  </div>
+
+                  <div style={styles.formActionsRow}>
+                    <button
+                      type="button"
+                      style={styles.btnCancel}
+                      onClick={() => setIsNewDeliveryModalOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      style={styles.btnSubmitGreen}
+                      disabled={isSubmittingDelivery}
+                    >
+                      {isSubmittingDelivery ? 'Creating Delivery...' : '🚀 Submit & Generate QR Slip'}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Summary */}
+                <div style={styles.summaryCard}>
+                  <div style={styles.summaryCardHeader}>
+                    <div>
+                      <span style={styles.summarySubTag}>REAL-TIME PREVIEW</span>
+                      <h3 style={styles.summaryHeading}>Delivery Summary</h3>
+                    </div>
+                    <span style={styles.summaryLiveTag}>● Live</span>
+                  </div>
+
+                  <div style={styles.summaryBody}>
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Customer</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.customerName.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Phone</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.customerPhone.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Zone</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.zone ? `📍 ${formData.zone}` : <em style={styles.emptyPlaceholder}>Not selected</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Address</span>
+                      <span style={styles.summaryValueMultiline}>
+                        {formData.address.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </span>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Item / Description</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.itemDescription.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryDivider} />
+
+                    <div style={styles.summaryRowInline}>
+                      <div>
+                        <span style={styles.summaryLabel}>Priority</span>
+                        <div style={{ marginTop: '2px' }}>
+                          <span style={styles.summaryPriorityBadge}>{formData.priority}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span style={styles.summaryLabel}>Fee &amp; ETA</span>
+                        <strong style={styles.summaryFeeHighlight}>KES {formData.deliveryFee || '250'}</strong>
+                        <span style={{ fontSize: '10.5px', color: '#38bdf8' }}>
+                          {getEstimatedDeliveryTime(formData.zone, formData.priority)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1742,7 +2741,7 @@ const styles = {
   panelTitle: { margin: '0 0 2px 0', fontSize: '18px', fontWeight: '800', letterSpacing: '-0.01em', color: '#ffffff' },
   panelDesc: { margin: 0, fontSize: '12.5px', color: '#94a3b8', lineHeight: 1.45 },
   form: { display: 'flex', flexDirection: 'column', gap: '14px' },
-  fieldGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  fieldGroup: { display: 'flex', flexDirection: 'column', gap: '5px' },
   label: { fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' },
   input: { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '11px 14px', color: '#ffffff', fontSize: '13px', outline: 'none' },
   submitBtn: { backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '10px', padding: '13px', fontWeight: '800', fontSize: '14px', cursor: 'pointer', marginTop: '6px', boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)' },
@@ -1827,10 +2826,226 @@ const styles = {
   timeTag: { fontSize: '11px', color: '#64748b' },
   inspectBtn: { fontSize: '11px', color: '#38bdf8', fontWeight: '700' },
   
-  retailerContainer: { display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', flex: 1 },
-  retailerTopBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' },
-  retailerControls: { display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' },
-  ledgerSearchBox: { backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '10px', padding: '10px 16px', color: '#ffffff', fontSize: '13px', width: '340px', outline: 'none' },
+  /* ─── Retailer Portal & New Delivery Form Styles ─── */
+  retailerPortalWrapper: { display: 'flex', flexDirection: 'column', gap: '22px', width: '100%', flex: 1 },
+  retailerToolbar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '14px',
+    backgroundColor: '#0f172a',
+    padding: '16px 22px',
+    borderRadius: '16px',
+    border: '1px solid #1e293b'
+  },
+  retailerHubTitle: { margin: 0, fontSize: '18px', fontWeight: '800', color: '#ffffff' },
+  retailerHubDesc: { margin: '2px 0 0 0', fontSize: '12px', color: '#94a3b8' },
+  openNewDeliveryBtn: {
+    backgroundColor: '#16a34a',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '10px',
+    padding: '10px 20px',
+    fontSize: '13px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.4)'
+  },
+  
+  newDeliveryContainer: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #1e293b',
+    borderRadius: '18px',
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px'
+  },
+  newDeliveryHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '12px',
+    borderBottom: '1px solid #1e293b',
+    paddingBottom: '16px'
+  },
+  newDeliveryIconBadge: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '10px',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    color: '#22c55e',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '20px'
+  },
+  newDeliveryTitle: { margin: 0, fontSize: '19px', fontWeight: '800', color: '#ffffff' },
+  zoneRoutingIndicator: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' },
+  zonePulseDot: { width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#22c55e', boxShadow: '0 0 6px #22c55e' },
+  zoneRoutingText: { fontSize: '12px', color: '#38bdf8', fontWeight: '600' },
+  resetFormBtn: { background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '6px 12px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer' },
+  
+  newDeliveryLayout: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+    gap: '24px'
+  },
+  newDeliveryForm: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+    flex: '1 1 500px'
+  },
+  formRow2: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '14px'
+  },
+  fieldLabel: { fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  requiredAsterisk: { color: '#ef4444', fontWeight: '900', marginLeft: '2px' },
+  fieldInput: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '10px',
+    padding: '11px 14px',
+    color: '#ffffff',
+    fontSize: '13.5px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box'
+  },
+  fieldSelect: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '10px',
+    padding: '11px 12px',
+    color: '#ffffff',
+    fontSize: '13px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box'
+  },
+  fieldTextarea: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '10px',
+    padding: '11px 14px',
+    color: '#ffffff',
+    fontSize: '13px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+    minHeight: '70px',
+    resize: 'vertical'
+  },
+  fieldErrorText: { fontSize: '11px', color: '#f87171', marginTop: '2px', fontWeight: '600' },
+  currencyInputContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '10px',
+    overflow: 'hidden'
+  },
+  currencyPrefixBadge: {
+    padding: '10px 14px',
+    backgroundColor: '#0f172a',
+    color: '#38bdf8',
+    fontSize: '12px',
+    fontWeight: '800',
+    borderRight: '1px solid #334155'
+  },
+  currencyInput: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    padding: '10px 14px',
+    color: '#ffffff',
+    fontSize: '13.5px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box'
+  },
+  formActionsRow: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: '12px',
+    marginTop: '10px',
+    flexWrap: 'wrap'
+  },
+  btnCancel: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    color: '#94a3b8',
+    padding: '12px 22px',
+    borderRadius: '10px',
+    fontSize: '13px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  btnSubmitGreen: {
+    backgroundColor: '#16a34a',
+    color: '#ffffff',
+    border: 'none',
+    padding: '12px 26px',
+    borderRadius: '10px',
+    fontSize: '14px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 16px rgba(22, 163, 74, 0.4)'
+  },
+
+  /* Live Delivery Summary Card */
+  summaryCard: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '16px',
+    padding: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+    height: 'fit-content',
+    flex: '1 1 320px'
+  },
+  summaryCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottom: '1px solid #334155',
+    paddingBottom: '12px'
+  },
+  summarySubTag: { fontSize: '9.5px', color: '#38bdf8', fontWeight: '800', letterSpacing: '0.6px' },
+  summaryHeading: { margin: '2px 0 0 0', fontSize: '16px', fontWeight: '800', color: '#ffffff' },
+  summaryLiveTag: { fontSize: '11px', color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.15)', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' },
+  summaryBody: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  summaryItem: { display: 'flex', flexDirection: 'column', gap: '2px' },
+  summaryLabel: { fontSize: '10px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.4px' },
+  summaryValue: { fontSize: '13px', color: '#f8fafc', fontWeight: '700' },
+  summaryValueMultiline: { fontSize: '12.5px', color: '#cbd5e1', lineHeight: 1.4 },
+  emptyPlaceholder: { color: '#64748b', fontStyle: 'italic', fontWeight: 'normal' },
+  summaryDivider: { height: '1px', backgroundColor: '#334155', margin: '2px 0' },
+  summaryRowInline: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
+  summaryPriorityBadge: { display: 'inline-block', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', border: '1px solid' },
+  summaryValueHighlight: { fontSize: '13.5px', color: '#fde047', fontWeight: '800', display: 'block', marginTop: '2px' },
+  summaryFeeHighlight: { fontSize: '13.5px', color: '#34d399', fontWeight: '800', display: 'block', marginTop: '2px' },
+  summaryEtaBadge: { fontSize: '11.5px', color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', marginTop: '2px', display: 'inline-block' },
+  summaryNotesBlock: { backgroundColor: '#0f172a', padding: '8px 12px', borderRadius: '8px', border: '1px solid #334155' },
+  summaryNotesText: { margin: '2px 0 0 0', fontSize: '11.5px', color: '#cbd5e1', fontStyle: 'italic' },
+  autoRouteFeatureBox: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#0f172a', padding: '10px 12px', borderRadius: '8px', border: '1px solid #334155', marginTop: '4px' },
+  
+  retailerLedgerCard: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #1e293b',
+    borderRadius: '18px',
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '18px'
+  },
+  
   tableWrapper: { backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '18px', overflowX: 'auto', width: '100%' },
   table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
   trHead: { borderBottom: '1px solid #1e293b', backgroundColor: '#0a101d' },
@@ -1925,12 +3140,12 @@ const styles = {
   modalOverlay: {
     position: 'fixed',
     inset: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 9999,
-    backdropFilter: 'blur(6px)',
+    backdropFilter: 'blur(8px)',
     padding: '20px',
     boxSizing: 'border-box',
   },
@@ -1962,6 +3177,79 @@ const styles = {
   modalFooter: { marginTop: '8px' },
   modalDoneBtn: { width: '100%', height: '44px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '13.5px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)' },
   
+  /* QR Slip Dedicated Modal Styles */
+  qrSlipModalCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: '24px',
+    width: '100%',
+    maxWidth: '540px',
+    padding: '26px 30px',
+    border: '1.5px solid #38bdf8',
+    boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    maxHeight: '90vh',
+    overflowY: 'auto'
+  },
+  qrSlipStatusBanner: {
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    border: '1.5px solid #22c55e',
+    borderRadius: '12px',
+    padding: '10px 14px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2px',
+    textAlign: 'center'
+  },
+  qrSlipCodeContainer: {
+    backgroundColor: '#0f172a',
+    borderRadius: '16px',
+    padding: '16px',
+    border: '1px solid #334155',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '10px'
+  },
+  qrSlipCodeWhiteBox: {
+    backgroundColor: '#ffffff',
+    padding: '12px',
+    borderRadius: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
+  },
+  qrSlipModalActions: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '12px',
+    marginTop: '6px'
+  },
+  printSlipBtn: {
+    backgroundColor: '#0f172a',
+    border: '1.5px solid #38bdf8',
+    color: '#38bdf8',
+    borderRadius: '10px',
+    height: '46px',
+    fontSize: '13px',
+    fontWeight: '800',
+    cursor: 'pointer'
+  },
+  doneSlipBtn: {
+    backgroundColor: '#16a34a',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '10px',
+    height: '46px',
+    fontSize: '13.5px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.4)'
+  },
+
   testDirectLinkBtn: { display: 'block', textAlign: 'center', backgroundColor: '#0f172a', color: '#38bdf8', padding: '10px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none', border: '1px solid #0284c7' },
   quickValidateBtn: { width: '100%', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', padding: '11px', borderRadius: '10px', fontSize: '12.5px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)' },
 
