@@ -3,91 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reflex - Delivery Coordination System</title>
+    <title>Reflex - Delivery Platform</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; color: #333; }
-        header { text-align: center; margin-bottom: 20px; }
-        .nav-tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
-        .nav-tabs button { padding: 10px 20px; cursor: pointer; border: none; background: #ddd; font-weight: bold; border-radius: 5px; }
-        .nav-tabs button.active { background: #007bff; color: white; }
-        .view-panel { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 800px; margin: 0 auto; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif; }
+        body { background-color: #080c14; color: #f1f5f9; min-height: 100vh; width: 100vw; display: flex; flex-direction: column; overflow-x: hidden; }
+        
+        header { height: 74px; background: #0f172a; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; width: 100%; }
+        .brand { display: flex; align-items: center; gap: 14px; }
+        .logo { width: 40px; height: 40px; background: #0284c7; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 900; color: #fff; box-shadow: 0 2px 10px rgba(2, 132, 199, 0.4); }
+        .brand-title { font-size: 18px; font-weight: 800; color: #fff; margin: 0; }
+        .live-tag { font-size: 10px; font-weight: 900; color: #38bdf8; background: rgba(56, 189, 248, 0.15); padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(56, 189, 248, 0.3); }
+        .brand-sub { font-size: 11px; color: #64748b; }
+        
+        .nav-tabs { display: flex; background: #1e293b; padding: 4px; border-radius: 12px; border: 1px solid #334155; gap: 4px; }
+        .nav-tabs button { padding: 9px 20px; cursor: pointer; border: none; background: transparent; color: #94a3b8; font-weight: 700; font-size: 13px; border-radius: 10px; transition: all 0.2s; }
+        .nav-tabs button.active { background: #0284c7; color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+
+        .live-status { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #64748b; background: #1e293b; padding: 6px 14px; border-radius: 20px; border: 1px solid #334155; }
+        .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 5px #22c55e; }
+
+        .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; padding: 20px 32px 0 32px; width: 100%; }
+        .kpi-box { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 16px; display: flex; align-items: center; gap: 14px; }
+        .kpi-icon { width: 44px; height: 44px; background: #1e293b; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #38bdf8; }
+        .kpi-val { font-size: 22px; font-weight: 900; color: #fff; line-height: 1.1; }
+        .kpi-lbl { font-size: 11px; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px; display: block; }
+
+        main { padding: 20px 32px 40px 32px; flex: 1; width: 100%; }
+        .view-panel { display: none; width: 100%; }
         .view-panel.active { display: block; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
-        th { background: #007bff; color: white; }
-        input, select { width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button.action-btn { background: #28a745; color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
-        button.action-btn:hover { background: #218838; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-        .Pending { background: #ffc107; color: #000; }
-        .Assigned { background: #17a2b8; color: white; }
-        .Picked.Up { background: #6f42c1; color: white; }
-        .Delivered { background: #28a745; color: white; }
+
+        .grid-layout { display: grid; grid-template-columns: 380px 1fr; gap: 24px; width: 100%; }
+        .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 20px; padding: 24px; }
+        .card h2 { font-size: 17px; font-weight: 800; margin-bottom: 2px; color: #fff; }
+        .card p.desc { font-size: 12px; color: #64748b; margin-bottom: 16px; }
+
+        .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+        label { font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        input, select { width: 100%; padding: 12px 14px; background: #1e293b; border: 1px solid #334155; border-radius: 10px; color: #fff; font-size: 13px; outline: none; }
+        input:focus, select:focus { border-color: #38bdf8; }
+        button.action-btn { width: 100%; background: #0284c7; color: white; border: none; padding: 14px; cursor: pointer; border-radius: 12px; font-weight: 800; font-size: 14px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3); margin-top: 6px; }
+
+        .table-wrap { background: #0f172a; border: 1px solid #1e293b; border-radius: 20px; overflow: hidden; width: 100%; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background: #0a101d; padding: 16px 20px; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #1e293b; }
+        td { padding: 16px 20px; border-bottom: 1px solid #1e293b; font-size: 13px; color: #cbd5e1; }
+        tr:hover td { background: #131d31; }
+
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; }
+        .OPEN { background: rgba(253, 224, 71, 0.15); color: #fde047; border: 1px solid rgba(253, 224, 71, 0.3); }
+        .ASSIGNED { background: rgba(165, 180, 252, 0.15); color: #a5b4fc; border: 1px solid rgba(165, 180, 252, 0.3); }
+        .PICKED_UP { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+        .DELIVERED { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+        
+        .code-pill { font-family: monospace; font-weight: 800; color: #38bdf8; }
+        .token-tag { font-family: monospace; font-size: 11px; color: #fde047; background: #1e293b; padding: 3px 8px; border-radius: 6px; }
+        .rider-pill { background: #1e293b; padding: 4px 10px; border-radius: 8px; color: #a5b4fc; font-weight: 700; font-size: 12px; }
+
+        /* Rider View full screen card grid */
+        .rider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+        .rider-card { background: #0f172a; border: 1px solid #1e293b; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>⚡ Reflex Delivery System</h1>
-        <p>Live Nairobi Retail Coordination Dashboard</p>
+        <div class="brand">
+            <div class="logo">⚡</div>
+            <div>
+                <h1 class="brand-title">REFLEX Logistics Network</h1>
+                <span class="brand-sub">Dispatcher · Retailer · Rider — Production Control Plane</span>
+            </div>
+        </div>
+
+        <div class="nav-tabs">
+            <button onclick="switchView('dispatcher')" class="active" id="btn-dispatcher">🎛️ Dispatcher</button>
+            <button onclick="switchView('retailer')" id="btn-retailer">📋 Retailer Ledger</button>
+            <button onclick="switchView('rider')" id="btn-rider">🏍️ Rider Portal</button>
+        </div>
+
+        <div class="live-status">
+            <span class="live-dot"></span>
+            <span id="order-count-tag">Loading...</span>
+        </div>
     </header>
 
-    <div class="nav-tabs">
-        <button onclick="switchView('retailer')" class="active" id="btn-retailer">Retailer Portal</button>
-        <button onclick="switchView('dispatcher')" id="btn-dispatcher">Dispatcher Panel</button>
-        <button onclick="switchView('rider')" id="btn-rider">Rider App View</button>
+    <div class="kpi-strip">
+        <div class="kpi-box">
+            <div class="kpi-icon">📦</div>
+            <div>
+                <span class="kpi-val" id="kpi-total">0</span>
+                <span class="kpi-lbl">Total Dispatches</span>
+            </div>
+        </div>
+        <div class="kpi-box">
+            <div class="kpi-icon" style="color: #fde047; background: rgba(253, 224, 71, 0.12);">⏳</div>
+            <div>
+                <span class="kpi-val" id="kpi-pending" style="color: #fde047;">0</span>
+                <span class="kpi-lbl">Pending Pickup</span>
+            </div>
+        </div>
+        <div class="kpi-box">
+            <div class="kpi-icon" style="color: #a5b4fc; background: rgba(165, 180, 252, 0.12);">🚴</div>
+            <div>
+                <span class="kpi-val" id="kpi-assigned" style="color: #a5b4fc;">0</span>
+                <span class="kpi-lbl">Assigned</span>
+            </div>
+        </div>
+        <div class="kpi-box">
+            <div class="kpi-icon" style="color: #38bdf8; background: rgba(56, 189, 248, 0.12);">🚚</div>
+            <div>
+                <span class="kpi-val" id="kpi-transit" style="color: #38bdf8;">0</span>
+                <span class="kpi-lbl">In Transit</span>
+            </div>
+        </div>
+        <div class="kpi-box">
+            <div class="kpi-icon" style="color: #34d399; background: rgba(52, 211, 153, 0.12);">✓</div>
+            <div>
+                <span class="kpi-val" id="kpi-delivered" style="color: #34d399;">0</span>
+                <span class="kpi-lbl">Delivered</span>
+            </div>
+        </div>
     </div>
 
-    <div id="retailer" class="view-panel active">
-        <h2>📦 Log a New Delivery Request</h2>
-        <form id="delivery-form">
-            <label>Shop Name:</label>
-            <input type="text" id="retailer-name" value="ElectroShop Nairobi" required>
-            
-            <label>Customer Name:</label>
-            <input type="text" id="customer-name" placeholder="e.g., David Kamau" required>
-            
-            <label>Customer Phone:</label>
-            <input type="text" id="customer-phone" placeholder="e.g., +254711000000" required>
-            
-            <label>Delivery Address:</label>
-            <input type="text" id="address" placeholder="e.g., Moi Avenue, Nairobi CBD" required>
-            
-            <label>Item Description:</label>
-            <input type="text" id="item" placeholder="e.g., Bluetooth Speaker" required>
-            
-            <button type="submit" class="action-btn">Submit Request</button>
-        </form>
+    <main>
+        <!-- Dispatcher View -->
+        <div id="dispatcher" class="view-panel active">
+            <div class="grid-layout">
+                <div class="card">
+                    <h2>➕ Create Delivery Order</h2>
+                    <p class="desc">Persists live into MySQL database on Railway.</p>
+                    <form id="delivery-form">
+                        <div class="form-group">
+                            <label>Merchant / Shop Name</label>
+                            <input type="text" id="retailer-name" value="Kamau Electronics" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Recipient Full Name</label>
+                            <input type="text" id="customer-name" placeholder="e.g. Amina Wanjiru" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Recipient Phone</label>
+                            <input type="text" id="customer-phone" placeholder="e.g. 0712345678" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Delivery Address Node</label>
+                            <input type="text" id="address" placeholder="e.g. Westlands, Nairobi" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Package / Item Description</label>
+                            <input type="text" id="item" placeholder="e.g. Wireless Router" required>
+                        </div>
+                        <button type="submit" class="action-btn">🚀 Log Delivery to Railway DB</button>
+                    </form>
+                </div>
 
-        <h3>Active Shop Deliveries</h3>
-        <table>
-            <thead>
-                <tr><th>Item</th><th>Customer</th><th>Status</th><th>Assigned Rider</th></tr>
-            </thead>
-            <tbody id="retailer-table-body"></tbody>
-        </table>
-    </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Waybill Ref</th>
+                                <th>Item Description</th>
+                                <th>Recipient & Phone</th>
+                                <th>Destination Address</th>
+                                <th>Status</th>
+                                <th>Assign Fleet Rider</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dispatcher-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
-    <div id="dispatcher" class="view-panel">
-        <h2>🎛️ Dispatcher Assignment Dashboard</h2>
-        <table>
-            <thead>
-                <tr><th>Shop</th><th>Item & Address</th><th>Status</th><th>Assign Rider</th></tr>
-            </thead>
-            <tbody id="dispatcher-table-body"></tbody>
-        </table>
-    </div>
+        <!-- Retailer View -->
+        <div id="retailer" class="view-panel">
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Waybill Ref</th>
+                            <th>Merchant Shop</th>
+                            <th>Recipient Customer</th>
+                            <th>Phone</th>
+                            <th>Package Description</th>
+                            <th>Destination Node</th>
+                            <th>Assigned Rider</th>
+                            <th>QR Security Token</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="retailer-table-body"></tbody>
+                </table>
+            </div>
+        </div>
 
-    <div id="rider" class="view-panel">
-        <h2>🏍️ Rider Status Update Portal</h2>
-        <table>
-            <thead>
-                <tr><th>Order</th><th>Customer & Address</th><th>Current Status</th><th>Update Status</th></tr>
-            </thead>
-            <tbody id="rider-table-body"></tbody>
-        </table>
-    </div>
+        <!-- Rider View -->
+        <div id="rider" class="view-panel">
+            <div class="rider-grid" id="rider-cards-container"></div>
+        </div>
+    </main>
 
     <script>
         const socket = io();
@@ -119,72 +234,105 @@
 
         // Listen for live updates from server
         socket.on('init_data', (data) => {
-            allDeliveries = data;
-            renderAllTables();
+            allDeliveries = Array.isArray(data) ? data : [];
+            renderAllViews();
         });
 
         socket.on('update_deliveries', (data) => {
-            allDeliveries = data;
-            renderAllTables();
+            allDeliveries = Array.isArray(data) ? data : [];
+            renderAllViews();
         });
 
-        function renderAllTables() {
-            const retailerTbody = document.getElementById('retailer-table-body');
-            const dispatcherTbody = document.getElementById('dispatcher-table-body');
-            const riderTbody = document.getElementById('rider-table-body');
+        function updateKpis() {
+            const total = allDeliveries.length;
+            document.getElementById('kpi-total').textContent = total;
+            document.getElementById('kpi-pending').textContent = allDeliveries.filter(d => d.status === 'OPEN' || !d.riderName).length;
+            document.getElementById('kpi-assigned').textContent = allDeliveries.filter(d => d.status === 'ASSIGNED').length;
+            document.getElementById('kpi-transit').textContent = allDeliveries.filter(d => d.status === 'PICKED_UP').length;
+            document.getElementById('kpi-delivered').textContent = allDeliveries.filter(d => d.status === 'DELIVERED').length;
+            document.getElementById('order-count-tag').textContent = `${total} orders synced`;
+        }
 
-            retailerTbody.innerHTML = '';
+        function renderAllViews() {
+            updateKpis();
+
+            const dispatcherTbody = document.getElementById('dispatcher-table-body');
+            const retailerTbody = document.getElementById('retailer-table-body');
+            const riderCards = document.getElementById('rider-cards-container');
+
             dispatcherTbody.innerHTML = '';
-            riderTbody.innerHTML = '';
+            retailerTbody.innerHTML = '';
+            riderCards.innerHTML = '';
 
             allDeliveries.forEach(d => {
-                // Retailer Table
-                retailerTbody.innerHTML += `<tr>
-                    <td>${d.item}</td>
-                    <td>${d.customer}</td>
-                    <td><span class="badge ${d.status}">${d.status}</span></td>
-                    <td>${d.rider}</td>
-                </tr>`;
+                const ref = d.reference || `#DEL-${d.id}`;
+                const statusClass = d.status || 'OPEN';
+                const custName = d.customerName || d.customer || 'Customer';
+                const custPhone = d.customerPhone || d.phone || '';
+                const dest = d.deliveryAddress || d.address || 'Nairobi';
+                const item = d.itemDescription || d.item || 'Item Package';
+                const retailer = d.retailerName || d.retailer || 'Kamau Electronics';
+                const qrToken = d.qrToken || '—';
 
                 // Dispatcher Table
                 dispatcherTbody.innerHTML += `<tr>
-                    <td>${d.retailer}</td>
-                    <td><b>${d.item}</b><br><small>${d.address}</small></td>
-                    <td><span class="badge ${d.status}">${d.status}</span></td>
+                    <td><span class="code-pill">${ref}</span></td>
+                    <td><strong>${item}</strong></td>
+                    <td>${custName} (${custPhone})</td>
+                    <td>${dest}</td>
+                    <td><span class="badge ${statusClass}">${statusClass}</span></td>
                     <td>
-                        <select onchange="assignRider(${d.id}, this.value)">
-                            <option value="">Select Rider</option>
-                            <option value="Rider Alex" ${d.rider==='Rider Alex'?'selected':''}>Rider Alex</option>
-                            <option value="Rider Brian" ${d.rider==='Rider Brian'?'selected':''}>Rider Brian</option>
-                            <option value="Rider Christine" ${d.rider==='Rider Christine'?'selected':''}>Rider Christine</option>
-                        </select>
+                        ${d.status === 'OPEN' || !d.riderName ? `
+                            <select onchange="assignRider(${d.id}, this.value)" style="padding: 8px 12px; font-size: 12px; width: 180px;">
+                                <option value="">Assign Rider...</option>
+                                <option value="4">Brian Mutua (0745678901)</option>
+                                <option value="5">Grace Wanjiru (0756789012)</option>
+                                <option value="6">James Otieno (0767890123)</option>
+                            </select>
+                        ` : `<span class="rider-pill">🚴 ${d.riderName}</span>`}
                     </td>
                 </tr>`;
 
-                // Rider Table
-                riderTbody.innerHTML += `<tr>
-                    <td><b>${d.item}</b><br><small>From: ${d.retailer}</small></td>
-                    <td>${d.customer}<br><small>${d.address}</small></td>
-                    <td><span class="badge ${d.status}">${d.status}</span></td>
-                    <td>
-                        <select onchange="updateStatus(${d.id}, this.value)">
-                            <option value="Pending" ${d.status==='Pending'?'selected':''}>Pending</option>
-                            <option value="Assigned" ${d.status==='Assigned'?'selected':''}>Assigned</option>
-                            <option value="Picked Up" ${d.status==='Picked Up'?'selected':''}>Picked Up</option>
-                            <option value="Delivered" ${d.status==='Delivered'?'selected':''}>Delivered</option>
-                        </select>
-                    </td>
+                // Retailer Table
+                const verifyUrl = `https://backend-production-7f0d0.up.railway.app/verify.html?id=${d.id}&token=${encodeURIComponent(d.qrToken || `REFLEX-${ref}`)}`;
+                retailerTbody.innerHTML += `<tr>
+                    <td><span class="code-pill">${ref}</span></td>
+                    <td>${retailer}</td>
+                    <td><strong>${custName}</strong></td>
+                    <td>${custPhone}</td>
+                    <td>${item}</td>
+                    <td>${dest}</td>
+                    <td>${d.riderName ? `<span class="rider-pill">🚴 ${d.riderName}</span>` : '<em style="color:#64748b">Pending</em>'}</td>
+                    <td><a href="${verifyUrl}" target="_blank" class="token-tag" style="text-decoration:none;" title="Click to verify on Railway">${qrToken ? qrToken.slice(0, 16) + '...' : 'Verify ↗'}</a></td>
+                    <td><span class="badge ${statusClass}">${statusClass}</span></td>
                 </tr>`;
+
+                // Rider Grid Cards
+                riderCards.innerHTML += `
+                    <div class="rider-card">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <span style="font-size: 10px; color: #94a3b8; font-weight: bold; letter-spacing: 0.8px;">WAYBILL</span>
+                                <h4 style="margin: 2px 0 0 0; color: #38bdf8; font-size: 16px;">${ref}</h4>
+                            </div>
+                            <span class="badge ${statusClass}">${statusClass}</span>
+                        </div>
+                        <div style="background: #1e293b; padding: 12px; border-radius: 12px; font-size: 13px;">
+                            <p style="margin-bottom: 4px;">📦 <strong>${item}</strong></p>
+                            <p style="margin-bottom: 4px; color: #cbd5e1;">👤 ${custName} (${custPhone})</p>
+                            <p style="color: #94a3b8;">📍 ${dest}</p>
+                        </div>
+                        <div style="font-size: 11px; color: #64748b;">
+                            <span>Assigned: ${d.riderName || 'Pending Assignment'}</span>
+                        </div>
+                    </div>
+                `;
             });
         }
 
-        function assignRider(id, riderName) {
-            if(!riderName) return;
-            socket.emit('assign_rider', { id, rider: riderName });
-        }
-
-        function updateStatus(id, status) {
-            socket.emit('update_status', { id, status });
+        function assignRider(id, riderId) {
+            if(!riderId) return;
+            socket.emit('assign_rider', { id, riderId: Number(riderId) });
         }
     </script>
 </body>

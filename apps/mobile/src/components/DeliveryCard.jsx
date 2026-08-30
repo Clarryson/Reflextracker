@@ -1,80 +1,103 @@
 import React from 'react';
 
-export default function DeliveryCard({ delivery, onSelect }) {
+export default function DeliveryCard({ delivery, onSelect, onPickupClick }) {
+  const isAssigned = delivery.status === 'ASSIGNED' || delivery.status === 'OPEN';
   const isPickedUp = delivery.status === 'PICKED_UP';
-  const isAssigned = delivery.status === 'ASSIGNED';
   const isDelivered = delivery.status === 'DELIVERED';
 
-  const getStatusColor = () => {
-    if (isDelivered) return '#16a34a';
-    if (isPickedUp) return '#0284c7';
-    return '#f59e0b';
+  const getStatusBadge = () => {
+    if (isDelivered) return { label: 'Delivered', bg: '#10b98122', text: '#34d399', border: '#10b98144' };
+    if (isPickedUp) return { label: 'In Transit', bg: '#38bdf822', text: '#38bdf8', border: '#38bdf844' };
+    return { label: 'Assigned', bg: '#818cf822', text: '#a5b4fc', border: '#818cf844' };
   };
 
-  const navUrl = delivery.dropoffLat && delivery.dropoffLng
-    ? `https://www.google.com/maps/dir/?api=1&destination=${delivery.dropoffLat},${delivery.dropoffLng}`
-    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(delivery.dropoffAddress || '')}`;
+  const badge = getStatusBadge();
 
   return (
-    <div style={styles.card}>
+    <div style={styles.card} onClick={() => onSelect && onSelect(delivery)}>
+      {/* Top Waybill Bar */}
       <div style={styles.header}>
-        <div>
-          <span style={styles.orderLabel}>ORDER</span>
-          <h4 style={styles.orderId}>#{delivery.id ? delivery.id.slice(0, 8) : 'DEL-001'}</h4>
+        <div style={styles.refBlock}>
+          <span style={styles.tag}>WAYBILL</span>
+          <h4 style={styles.refText}>{delivery.reference || `#${delivery.id}`}</h4>
         </div>
-        <span style={{ ...styles.badge, backgroundColor: getStatusColor() }}>
-          {delivery.status}
+        <span
+          style={{
+            ...styles.badge,
+            backgroundColor: badge.bg,
+            color: badge.text,
+            borderColor: badge.border,
+          }}
+        >
+          {badge.label}
         </span>
       </div>
 
-      {delivery.customerName && (
+      {/* Package & Customer Info */}
+      <div style={styles.contentBlock}>
+        <p style={styles.itemTitle}>📦 {delivery.packageDetails || delivery.itemDescription || 'Delivery Package'}</p>
         <div style={styles.customerRow}>
-          <span style={styles.customerName}>👤 {delivery.customerName}</span>
+          <span style={styles.customerName}>👤 {delivery.customerName || 'Customer Recipient'}</span>
           {delivery.customerPhone && (
-            <a href={`tel:${delivery.customerPhone}`} style={styles.callBtn}>
-              📞 Call Customer
+            <a
+              href={`tel:${delivery.customerPhone}`}
+              style={styles.callPill}
+              onClick={(e) => e.stopPropagation()}
+            >
+              📞 {delivery.customerPhone}
             </a>
           )}
         </div>
-      )}
-
-      <div style={styles.timeline}>
-        <div style={styles.timelineItem}>
-          <div style={styles.dotPickup}>●</div>
-          <div style={styles.timelineContent}>
-            <span style={styles.stopLabel}>PICKUP FROM</span>
-            <p style={styles.addressText}>{delivery.pickupAddress || 'Retail Merchant Depot'}</p>
-          </div>
-        </div>
-
-        <div style={styles.timelineLine} />
-
-        <div style={styles.timelineItem}>
-          <div style={styles.dotDropoff}>●</div>
-          <div style={styles.timelineContent}>
-            <span style={styles.stopLabel}>DROPOFF TO</span>
-            <p style={styles.addressText}>{delivery.dropoffAddress || 'Customer Address'}</p>
-          </div>
-        </div>
       </div>
 
-      <div style={styles.actionRow}>
-        <a
-          href={navUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={styles.mapBtn}
-          onClick={(e) => e.stopPropagation()}
-        >
-          🗺️ Open Map
-        </a>
+      {/* Destination Preview */}
+      <div style={styles.routePreview}>
+        <div style={styles.dot}>●</div>
+        <span style={styles.addressText}>
+          {delivery.dropoffAddress || delivery.deliveryAddress || 'Nairobi Destination'}
+        </span>
+      </div>
 
+      {/* Card Action Row */}
+      <div style={styles.actionRow}>
         <button
-          onClick={() => onSelect && onSelect(delivery)}
-          style={styles.openBtn}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(delivery);
+          }}
+          style={styles.detailBtn}
         >
-          {isAssigned ? 'Start Pickup →' : isPickedUp ? 'Continue Dropoff →' : 'View Details'}
+          Inspect Details
         </button>
+
+        {isAssigned && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onPickupClick) onPickupClick(delivery);
+              else onSelect(delivery);
+            }}
+            style={styles.actionBtn}
+          >
+            Confirm Pickup →
+          </button>
+        )}
+
+        {isPickedUp && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(delivery);
+            }}
+            style={{ ...styles.actionBtn, backgroundColor: '#0284c7' }}
+          >
+            Dropoff Task →
+          </button>
+        )}
+
+        {isDelivered && (
+          <span style={styles.completedTag}>✓ Completed</span>
+        )}
       </div>
     </div>
   );
@@ -83,131 +106,132 @@ export default function DeliveryCard({ delivery, onSelect }) {
 const styles = {
   card: {
     backgroundColor: '#1e293b',
-    borderRadius: '16px',
+    borderRadius: '18px',
     padding: '18px',
     border: '1px solid #334155',
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
-    boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+    gap: '12px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+    cursor: 'pointer',
+    transition: 'transform 0.15s ease, border-color 0.2s ease',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
-  orderLabel: {
+  refBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  tag: {
     fontSize: '10px',
     color: '#94a3b8',
     fontWeight: 'bold',
-    letterSpacing: '1px',
+    letterSpacing: '0.8px',
   },
-  orderId: {
+  refText: {
     margin: '2px 0 0 0',
-    fontSize: '17px',
-    color: '#f8fafc',
-    fontWeight: 'bold',
+    fontSize: '16px',
+    fontWeight: '800',
+    color: '#38bdf8',
   },
   badge: {
     padding: '4px 10px',
-    borderRadius: '8px',
+    borderRadius: '20px',
     fontSize: '11px',
     fontWeight: 'bold',
-    color: '#ffffff',
+    border: '1px solid',
     textTransform: 'uppercase',
+  },
+  contentBlock: {
+    backgroundColor: '#0f172a',
+    borderRadius: '12px',
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    border: '1px solid #1e293b',
+  },
+  itemTitle: {
+    margin: 0,
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#f8fafc',
   },
   customerRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
-    padding: '8px 12px',
-    borderRadius: '10px',
+    fontSize: '12px',
   },
   customerName: {
-    fontSize: '13px',
-    color: '#f1f5f9',
+    color: '#cbd5e1',
     fontWeight: '500',
   },
-  callBtn: {
-    fontSize: '12px',
+  callPill: {
     color: '#38bdf8',
     textDecoration: 'none',
-    fontWeight: 'bold',
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    padding: '4px 8px',
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    padding: '2px 8px',
     borderRadius: '6px',
-  },
-  timeline: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    position: 'relative',
-    paddingLeft: '4px',
-  },
-  timelineItem: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '12px',
-  },
-  timelineLine: {
-    width: '2px',
-    height: '14px',
-    backgroundColor: '#475569',
-    marginLeft: '6px',
-  },
-  timelineContent: {
-    flex: 1,
-  },
-  dotPickup: {
-    color: '#38bdf8',
-    fontSize: '16px',
-    lineHeight: '18px',
-  },
-  dotDropoff: {
-    color: '#4ade80',
-    fontSize: '16px',
-    lineHeight: '18px',
-  },
-  stopLabel: {
-    fontSize: '10px',
     fontWeight: 'bold',
+  },
+  routePreview: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '13px',
     color: '#94a3b8',
-    letterSpacing: '0.5px',
-    display: 'block',
+  },
+  dot: {
+    color: '#4ade80',
+    fontSize: '14px',
   },
   addressText: {
-    margin: '2px 0 0 0',
-    fontSize: '14px',
-    color: '#f8fafc',
-    lineHeight: '1.3',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   actionRow: {
     display: 'flex',
     gap: '10px',
     marginTop: '4px',
+    alignItems: 'center',
   },
-  mapBtn: {
+  detailBtn: {
     flex: 1,
-    textAlign: 'center',
-    backgroundColor: '#334155',
-    color: '#38bdf8',
-    textDecoration: 'none',
-    padding: '12px 8px',
+    height: '42px',
+    backgroundColor: '#0f172a',
+    color: '#94a3b8',
+    border: '1px solid #334155',
     borderRadius: '10px',
-    fontSize: '13px',
+    fontSize: '12px',
     fontWeight: 'bold',
-    boxSizing: 'border-box',
+    cursor: 'pointer',
   },
-  openBtn: {
+  actionBtn: {
     flex: 2,
+    height: '42px',
     backgroundColor: '#0284c7',
     color: '#ffffff',
     border: 'none',
-    padding: '12px 8px',
     borderRadius: '10px',
     fontSize: '13px',
     fontWeight: 'bold',
     cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
+  },
+  completedTag: {
+    flex: 2,
+    textAlign: 'center',
+    color: '#34d399',
+    fontSize: '12px',
+    fontWeight: 'bold',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    padding: '10px',
+    borderRadius: '10px',
+    border: '1px solid rgba(16, 185, 129, 0.2)',
   },
 };

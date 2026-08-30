@@ -9,7 +9,6 @@ export default function ActiveDeliveryScreen({
   socket,
   onBack,
   onDeliveryCompleted,
-  isOnline,
 }) {
   const [status, setStatus] = useState(delivery.status);
   const [isPhotoModalOpen, setPhotoModalOpen] = useState(false);
@@ -29,7 +28,7 @@ export default function ActiveDeliveryScreen({
         try {
           wakeLockRef.current = await navigator.wakeLock.request('screen');
         } catch {
-          // Wake lock might fail on low battery
+          // Wake lock fallback
         }
       }
     };
@@ -108,7 +107,7 @@ export default function ActiveDeliveryScreen({
       await verifyAndCompleteDelivery(
         delivery.id,
         verifiedCode,
-        podPhoto.dataUrl,
+        podPhoto.blob || podPhoto.dataUrl,
         riderId
       );
 
@@ -142,7 +141,7 @@ export default function ActiveDeliveryScreen({
 
   const navUrl = delivery.dropoffLat && delivery.dropoffLng
     ? `https://www.google.com/maps/dir/?api=1&destination=${delivery.dropoffLat},${delivery.dropoffLng}`
-    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(delivery.dropoffAddress || '')}`;
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(delivery.dropoffAddress || delivery.deliveryAddress || '')}`;
 
   return (
     <div style={styles.screen}>
@@ -151,11 +150,16 @@ export default function ActiveDeliveryScreen({
         <button onClick={onBack} style={styles.backBtn}>
           ← Back
         </button>
-        <span style={styles.navTitle}>Delivery #{delivery.id ? delivery.id.slice(0, 8) : 'DEL-001'}</span>
+        <div style={styles.navTitleBlock}>
+          <span style={styles.navWaybillTag}>IN PROGRESS</span>
+          <span style={styles.navTitle}>{delivery.reference || `#${delivery.id}`}</span>
+        </div>
         <span
           style={{
             ...styles.badge,
-            backgroundColor: status === 'PICKED_UP' ? '#0284c7' : '#f59e0b',
+            backgroundColor: status === 'PICKED_UP' ? '#38bdf822' : '#fde04722',
+            color: status === 'PICKED_UP' ? '#38bdf8' : '#fde047',
+            borderColor: status === 'PICKED_UP' ? '#38bdf844' : '#fde04744',
           }}
         >
           {status}
@@ -169,8 +173,8 @@ export default function ActiveDeliveryScreen({
           <div style={styles.routeNode}>
             <span style={styles.dotPickup}>●</span>
             <div>
-              <span style={styles.nodeLabel}>PICKUP LOCATION</span>
-              <p style={styles.nodeText}>{delivery.pickupAddress || 'Merchant Warehouse'}</p>
+              <span style={styles.nodeLabel}>PICKUP DEPOT</span>
+              <p style={styles.nodeText}>{delivery.pickupAddress || (delivery.retailerName ? `${delivery.retailerName} Depot` : 'Merchant Warehouse')}</p>
             </div>
           </div>
 
@@ -180,7 +184,7 @@ export default function ActiveDeliveryScreen({
             <span style={styles.dotDropoff}>●</span>
             <div>
               <span style={styles.nodeLabel}>DROPOFF DESTINATION</span>
-              <p style={styles.nodeText}>{delivery.dropoffAddress || 'Customer Address'}</p>
+              <p style={styles.nodeText}>{delivery.dropoffAddress || delivery.deliveryAddress || 'Customer Destination'}</p>
             </div>
           </div>
 
@@ -195,28 +199,28 @@ export default function ActiveDeliveryScreen({
           </a>
         </div>
 
-        {/* Customer Information */}
-        {delivery.customerName && (
-          <div style={styles.customerCard}>
-            <div style={styles.customerLeft}>
-              <span style={styles.customerName}>👤 {delivery.customerName}</span>
-              <span style={styles.customerNote}>Customer Phone</span>
-            </div>
-            {delivery.customerPhone && (
-              <a href={`tel:${delivery.customerPhone}`} style={styles.phoneCallBtn}>
-                📞 Call
-              </a>
-            )}
+        {/* Customer Information Card */}
+        <div style={styles.customerCard}>
+          <div style={styles.customerLeft}>
+            <span style={styles.customerName}>👤 {delivery.customerName || 'Customer Recipient'}</span>
+            <span style={styles.customerNote}>{delivery.packageDetails || delivery.itemDescription || 'Delivery Package'}</span>
           </div>
-        )}
+          {delivery.customerPhone && (
+            <a href={`tel:${delivery.customerPhone}`} style={styles.phoneCallBtn}>
+              📞 Call Recipient
+            </a>
+          )}
+        </div>
 
-        {/* In-Transit Dropoff Validation Gates (PICKED_UP Mode) */}
+        {/* In-Transit Dropoff Validation Checklist (PICKED_UP Mode) */}
         {status === 'PICKED_UP' && (
           <div style={styles.verificationCard}>
-            <h3 style={styles.cardHeading}>Dropoff Verification Checklist</h3>
-            <p style={styles.cardSubheading}>
-              Both steps below are required to complete the delivery.
-            </p>
+            <div style={styles.gateHeader}>
+              <h3 style={styles.cardHeading}>Dropoff Verification Gates</h3>
+              <span style={styles.gateSubheading}>
+                Both gates required for handoff confirmation
+              </span>
+            </div>
 
             <div style={styles.gateGrid}>
               {/* Gate 1: Photo */}
@@ -224,15 +228,17 @@ export default function ActiveDeliveryScreen({
                 onClick={() => setPhotoModalOpen(true)}
                 style={{
                   ...styles.gateTile,
-                  borderColor: podPhoto ? '#16a34a' : '#475569',
-                  backgroundColor: podPhoto ? 'rgba(22, 163, 74, 0.1)' : '#0f172a',
+                  borderColor: podPhoto ? '#22c55e' : '#334155',
+                  backgroundColor: podPhoto ? 'rgba(34, 197, 94, 0.12)' : '#0f172a',
                 }}
               >
-                <span style={styles.gateIcon}>{podPhoto ? '✓' : '📷'}</span>
+                <div style={{ ...styles.gateIconBadge, backgroundColor: podPhoto ? '#16a34a' : '#334155' }}>
+                  {podPhoto ? '✓' : '📷'}
+                </div>
                 <span style={styles.gateLabel}>
-                  {podPhoto ? 'Photo Captured' : 'Take Proof Photo'}
+                  {podPhoto ? 'Photo Uploaded' : 'Capture Proof Photo'}
                 </span>
-                {podPhoto && <span style={styles.gateSub}>({podPhoto.sizeKb} KB)</span>}
+                {podPhoto && <span style={styles.gateStatusBadge}>✓ {podPhoto.sizeKb} KB</span>}
               </button>
 
               {/* Gate 2: PIN / QR */}
@@ -240,34 +246,34 @@ export default function ActiveDeliveryScreen({
                 onClick={() => setQRModalOpen(true)}
                 style={{
                   ...styles.gateTile,
-                  borderColor: verifiedCode ? '#16a34a' : '#475569',
-                  backgroundColor: verifiedCode ? 'rgba(22, 163, 74, 0.1)' : '#0f172a',
+                  borderColor: verifiedCode ? '#22c55e' : '#334155',
+                  backgroundColor: verifiedCode ? 'rgba(34, 197, 94, 0.12)' : '#0f172a',
                 }}
               >
-                <span style={styles.gateIcon}>{verifiedCode ? '✓' : '🔢'}</span>
+                <div style={{ ...styles.gateIconBadge, backgroundColor: verifiedCode ? '#16a34a' : '#334155' }}>
+                  {verifiedCode ? '✓' : '🔢'}
+                </div>
                 <span style={styles.gateLabel}>
-                  {verifiedCode ? `Code: ${verifiedCode}` : 'Verify PIN / QR'}
+                  {verifiedCode ? 'Code Verified' : 'Verify PIN / QR'}
                 </span>
-                {verifiedCode && <span style={styles.gateSub}>Verified</span>}
+                {verifiedCode && <span style={styles.gateStatusBadge}>✓ Verified</span>}
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Fixed Ergonomic Bottom Action Anchor (56px) */}
+      {/* Fixed Ergonomic Bottom Action Bar */}
       <div style={styles.bottomBar}>
-        {status === 'ASSIGNED' && (
+        {status !== 'PICKED_UP' ? (
           <button
             onClick={handlePickup}
             disabled={isSubmitting}
             style={styles.primaryActionBtn}
           >
-            {isSubmitting ? 'Confirming...' : 'CONFIRM PACKAGE PICKUP'}
+            {isSubmitting ? 'Confirming Pickup...' : '✓ CONFIRM PACKAGE PICKUP'}
           </button>
-        )}
-
-        {status === 'PICKED_UP' && (
+        ) : (
           <button
             onClick={handleFinalCompletion}
             disabled={isSubmitting || !isReadyToComplete}
@@ -280,7 +286,7 @@ export default function ActiveDeliveryScreen({
             {isSubmitting
               ? 'Verifying & Finalizing...'
               : isReadyToComplete
-              ? 'COMPLETE DELIVERY'
+              ? '✓ COMPLETE DELIVERY'
               : 'Complete Delivery (Complete Steps Above)'}
           </button>
         )}
@@ -298,7 +304,7 @@ export default function ActiveDeliveryScreen({
         isOpen={isQRModalOpen}
         onClose={() => setQRModalOpen(false)}
         onCodeVerified={(code) => setVerifiedCode(code)}
-        expectedCode={delivery.verificationCode || '123456'}
+        expectedCode={delivery.qrToken || delivery.verificationCode || '123456'}
       />
     </div>
   );
@@ -309,50 +315,63 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     minHeight: '100vh',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#090d16',
     color: '#f8fafc',
     boxSizing: 'border-box',
     paddingBottom: '100px',
+    fontFamily: '"Inter", -apple-system, system-ui, sans-serif',
   },
   navBar: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '16px',
-    backgroundColor: '#1e293b',
-    borderBottom: '1px solid #334155',
+    backgroundColor: '#0f172a',
+    borderBottom: '1px solid #1e293b',
   },
   backBtn: {
     background: 'none',
     border: 'none',
     color: '#38bdf8',
-    fontSize: '15px',
+    fontSize: '14px',
     fontWeight: 'bold',
     cursor: 'pointer',
   },
-  navTitle: {
-    fontSize: '16px',
+  navTitleBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  navWaybillTag: {
+    fontSize: '9px',
+    color: '#94a3b8',
     fontWeight: 'bold',
+    letterSpacing: '0.8px',
+  },
+  navTitle: {
+    fontSize: '15px',
+    fontWeight: '800',
+    color: '#ffffff',
   },
   badge: {
     padding: '4px 10px',
-    borderRadius: '6px',
+    borderRadius: '12px',
     fontSize: '11px',
     fontWeight: 'bold',
-    color: '#fff',
+    border: '1px solid',
     textTransform: 'uppercase',
   },
   content: {
     padding: '16px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    gap: '14px',
   },
   routeCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: '16px',
-    padding: '20px',
-    border: '1px solid #334155',
+    backgroundColor: '#0f172a',
+    borderRadius: '18px',
+    padding: '18px',
+    border: '1px solid #1e293b',
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
@@ -364,45 +383,48 @@ const styles = {
   },
   dotPickup: {
     color: '#38bdf8',
-    fontSize: '18px',
+    fontSize: '16px',
   },
   dotDropoff: {
     color: '#4ade80',
-    fontSize: '18px',
+    fontSize: '16px',
   },
   nodeLabel: {
     fontSize: '10px',
     color: '#94a3b8',
     fontWeight: 'bold',
     letterSpacing: '0.5px',
+    display: 'block',
   },
   nodeText: {
     margin: '2px 0 0 0',
-    fontSize: '15px',
+    fontSize: '14px',
     color: '#f8fafc',
+    fontWeight: '600',
   },
   routeDivider: {
     height: '1px',
-    backgroundColor: '#334155',
-    margin: '4px 0',
+    backgroundColor: '#1e293b',
+    margin: '2px 0',
   },
   navLinkBtn: {
     marginTop: '6px',
     display: 'block',
     textAlign: 'center',
-    backgroundColor: '#334155',
+    backgroundColor: '#1e293b',
     color: '#38bdf8',
     textDecoration: 'none',
     padding: '12px',
-    borderRadius: '10px',
+    borderRadius: '12px',
     fontWeight: 'bold',
-    fontSize: '14px',
+    fontSize: '13px',
+    border: '1px solid #334155',
   },
   customerCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: '14px',
+    backgroundColor: '#0f172a',
+    borderRadius: '16px',
     padding: '14px 18px',
-    border: '1px solid #334155',
+    border: '1px solid #1e293b',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -410,6 +432,7 @@ const styles = {
   customerLeft: {
     display: 'flex',
     flexDirection: 'column',
+    gap: '2px',
   },
   customerName: {
     fontSize: '14px',
@@ -417,31 +440,35 @@ const styles = {
     color: '#f8fafc',
   },
   customerNote: {
-    fontSize: '11px',
+    fontSize: '12px',
     color: '#94a3b8',
   },
   phoneCallBtn: {
     backgroundColor: '#16a34a',
     color: '#fff',
     textDecoration: 'none',
-    padding: '8px 16px',
-    borderRadius: '8px',
-    fontSize: '13px',
+    padding: '8px 14px',
+    borderRadius: '10px',
+    fontSize: '12px',
     fontWeight: 'bold',
+    boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
   },
   verificationCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: '16px',
-    padding: '20px',
-    border: '1px solid #334155',
+    backgroundColor: '#0f172a',
+    borderRadius: '18px',
+    padding: '18px',
+    border: '1px solid #1e293b',
+  },
+  gateHeader: {
+    marginBottom: '14px',
   },
   cardHeading: {
-    margin: '0 0 4px 0',
-    fontSize: '16px',
+    margin: '0 0 2px 0',
+    fontSize: '15px',
     fontWeight: 'bold',
+    color: '#f8fafc',
   },
-  cardSubheading: {
-    margin: '0 0 16px 0',
+  gateSubheading: {
     fontSize: '12px',
     color: '#94a3b8',
   },
@@ -451,27 +478,34 @@ const styles = {
     gap: '12px',
   },
   gateTile: {
-    border: '2px dashed #475569',
-    borderRadius: '14px',
-    padding: '18px 10px',
+    borderRadius: '16px',
+    padding: '16px 12px',
+    border: '1.5px solid',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '6px',
+    gap: '8px',
     cursor: 'pointer',
     color: '#f8fafc',
   },
-  gateIcon: {
-    fontSize: '24px',
+  gateIconBadge: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '18px',
+    color: '#ffffff',
   },
   gateLabel: {
-    fontSize: '13px',
+    fontSize: '12px',
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  gateSub: {
-    fontSize: '11px',
+  gateStatusBadge: {
+    fontSize: '10px',
     color: '#4ade80',
     fontWeight: 'bold',
   },
@@ -488,13 +522,14 @@ const styles = {
   },
   primaryActionBtn: {
     width: '100%',
-    height: '56px',
+    height: '54px',
     backgroundColor: '#0284c7',
     color: '#ffffff',
     border: 'none',
     borderRadius: '14px',
-    fontSize: '16px',
+    fontSize: '15px',
     fontWeight: 'bold',
     letterSpacing: '0.5px',
+    boxShadow: '0 4px 14px rgba(2, 132, 199, 0.3)',
   },
 };

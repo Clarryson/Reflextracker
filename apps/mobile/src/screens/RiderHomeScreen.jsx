@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import DeliveryCard from '../components/DeliveryCard';
+import DeliveryDetailModal from '../components/DeliveryDetailModal';
+import PickupConfirmModal from '../components/PickupConfirmModal';
+import RiderSwitcherModal from '../components/RiderSwitcherModal';
 
 export default function RiderHomeScreen({
   riderId,
@@ -9,177 +12,248 @@ export default function RiderHomeScreen({
   isConnected,
   onRefresh,
   isLoading,
-  onAddSampleDelivery,
+  onConfirmPickup,
 }) {
-  const [customRiderInput, setCustomRiderInput] = useState('');
-  const [showRiderPicker, setShowRiderPicker] = useState(false);
+  const [filterTab, setFilterTab] = useState('active'); // 'active', 'transit', 'completed', 'all'
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Modals state
+  const [selectedDetailDelivery, setSelectedDetailDelivery] = useState(null);
+  const [pickupConfirmDelivery, setPickupConfirmDelivery] = useState(null);
+  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
 
-  const activeJobs = deliveries.filter((d) => d.status === 'ASSIGNED' || d.status === 'PICKED_UP');
-  const completedJobs = deliveries.filter((d) => d.status === 'DELIVERED');
+  const pendingPickup = deliveries.filter((d) => d.status === 'ASSIGNED' || d.status === 'OPEN');
+  const inTransit = deliveries.filter((d) => d.status === 'PICKED_UP');
+  const completed = deliveries.filter((d) => d.status === 'DELIVERED');
 
-  const handleCustomRiderSubmit = (e) => {
-    e.preventDefault();
-    if (customRiderInput.trim()) {
-      onRiderIdChange(customRiderInput.trim());
-      setShowRiderPicker(false);
+  const filteredDeliveries = deliveries.filter((d) => {
+    // Tab filter
+    if (filterTab === 'active' && d.status !== 'ASSIGNED' && d.status !== 'OPEN' && d.status !== 'PICKED_UP') return false;
+    if (filterTab === 'transit' && d.status !== 'PICKED_UP') return false;
+    if (filterTab === 'completed' && d.status !== 'DELIVERED') return false;
+
+    // Search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return (
+        (d.reference || '').toLowerCase().includes(q) ||
+        String(d.id).toLowerCase().includes(q) ||
+        (d.customerName || '').toLowerCase().includes(q) ||
+        (d.dropoffAddress || '').toLowerCase().includes(q) ||
+        (d.packageDetails || '').toLowerCase().includes(q)
+      );
     }
+    return true;
+  });
+
+  const getRiderName = (id) => {
+    if (id === '4') return 'Brian Mutua';
+    if (id === '5') return 'Grace Wanjiru';
+    if (id === '6') return 'James Otieno';
+    if (id === 'all') return 'All Fleet Deliveries';
+    return `Rider #${id}`;
   };
 
   return (
     <div style={styles.container}>
-      {/* Header */}
+      {/* Top Professional Header */}
       <header style={styles.header}>
-        <div style={styles.brandingRow}>
+        <div style={styles.topRow}>
           <div style={styles.brandGroup}>
             <div style={styles.logoBadge}>⚡</div>
             <div>
               <h1 style={styles.appTitle}>REFLEX Rider</h1>
-              <span style={styles.regionTag}>🇰🇪 Nairobi Network</span>
+              <span style={styles.regionTag}>Railway Production Network</span>
             </div>
           </div>
 
-          <div style={styles.statusGroup}>
-            <span
-              style={{
-                ...styles.socketDot,
-                backgroundColor: isConnected ? '#22c55e' : '#64748b',
-              }}
-            />
-            <span style={styles.socketText}>{isConnected ? 'Live' : 'Standby'}</span>
+          <div style={styles.headerRight}>
+            <div style={styles.livePill}>
+              <span
+                style={{
+                  ...styles.socketDot,
+                  backgroundColor: isConnected ? '#22c55e' : '#f59e0b',
+                }}
+              />
+              <span style={styles.socketText}>{isConnected ? 'Live' : 'Syncing'}</span>
+            </div>
+            <button onClick={onRefresh} style={styles.refreshIconBtn} disabled={isLoading}>
+              {isLoading ? '⏳' : '🔄'}
+            </button>
           </div>
         </div>
 
-        {/* Active Rider Bar */}
-        <div style={styles.riderBar}>
-          <div style={styles.riderInfo}>
-            <span style={styles.riderRole}>Active Rider ID:</span>
-            <span style={styles.riderBadge}>{riderId}</span>
+        {/* Rider Profile Card Button (Opens Switcher Modal) */}
+        <div style={styles.riderBar} onClick={() => setIsSwitcherOpen(true)}>
+          <div style={styles.riderAvatar}>
+            {getRiderName(riderId).slice(0, 1)}
           </div>
-          <button
-            onClick={() => setShowRiderPicker(!showRiderPicker)}
-            style={styles.switchRiderBtn}
-          >
-            {showRiderPicker ? 'Done' : 'Switch ID'}
+          <div style={styles.riderInfo}>
+            <span style={styles.riderRole}>Active Rider Account</span>
+            <strong style={styles.riderNameText}>{getRiderName(riderId)}</strong>
+          </div>
+          <button style={styles.switchPillBtn}>
+            Switch Profile ▾
           </button>
         </div>
 
-        {/* Rider Switcher Drawer */}
-        {showRiderPicker && (
-          <div style={styles.pickerDrawer}>
-            <div style={styles.presetButtons}>
-              {['rider-nairobi-01', 'rider-cbd-02', 'rider-westlands-03'].map((id) => (
-                <button
-                  key={id}
-                  onClick={() => {
-                    onRiderIdChange(id);
-                    setShowRiderPicker(false);
-                  }}
-                  style={{
-                    ...styles.presetBtn,
-                    backgroundColor: riderId === id ? '#0284c7' : '#334155',
-                  }}
-                >
-                  {id}
-                </button>
-              ))}
-            </div>
-            <form onSubmit={handleCustomRiderSubmit} style={styles.customIdForm}>
-              <input
-                type="text"
-                placeholder="Enter custom Rider UUID"
-                value={customRiderInput}
-                onChange={(e) => setCustomRiderInput(e.target.value)}
-                style={styles.customIdInput}
-              />
-              <button type="submit" style={styles.customIdSubmit}>
-                Set
-              </button>
-            </form>
+        {/* Shift Metrics Bar */}
+        <div style={styles.kpiRow}>
+          <div style={styles.kpiCard} onClick={() => setFilterTab('active')}>
+            <span style={styles.kpiValue}>{pendingPickup.length}</span>
+            <span style={styles.kpiLabel}>To Pickup</span>
           </div>
-        )}
+          <div style={styles.kpiCard} onClick={() => setFilterTab('transit')}>
+            <span style={{ ...styles.kpiValue, color: '#38bdf8' }}>{inTransit.length}</span>
+            <span style={styles.kpiLabel}>In Transit</span>
+          </div>
+          <div style={styles.kpiCard} onClick={() => setFilterTab('completed')}>
+            <span style={{ ...styles.kpiValue, color: '#34d399' }}>{completed.length}</span>
+            <span style={styles.kpiLabel}>Delivered</span>
+          </div>
+        </div>
       </header>
 
-      {/* Main Content Area */}
+      {/* Main Body */}
       <main style={styles.main}>
-        {/* Active In-Progress Highlight */}
-        {activeJobs.some((d) => d.status === 'PICKED_UP') && (
+        {/* In-Transit Ongoing Alert Banner */}
+        {inTransit.length > 0 && (
           <div style={styles.inTransitBanner}>
-            <div>
-              <span style={styles.inTransitLabel}>🚴 IN TRANSIT</span>
-              <p style={styles.inTransitText}>You have an ongoing dropoff task.</p>
+            <div style={styles.bannerLeft}>
+              <span style={styles.inTransitLabel}>🚴 ACTIVE IN-TRANSIT DROPOFF</span>
+              <p style={styles.inTransitText}>
+                {inTransit[0].reference || `#${inTransit[0].id}`}: {inTransit[0].dropoffAddress || 'Customer Destination'}
+              </p>
             </div>
             <button
-              onClick={() => {
-                const ongoing = activeJobs.find((d) => d.status === 'PICKED_UP');
-                if (ongoing) onSelectDelivery(ongoing);
-              }}
+              onClick={() => onSelectDelivery(inTransit[0])}
               style={styles.resumeBtn}
             >
-              Resume Dropoff →
+              Resume →
             </button>
           </div>
         )}
 
-        {/* Section Header */}
-        <div style={styles.sectionHeader}>
-          <h2 style={styles.sectionTitle}>
-            Assigned Deliveries ({activeJobs.length})
-          </h2>
-          <button
-            onClick={onRefresh}
-            disabled={isLoading}
-            style={styles.refreshBtn}
-          >
-            {isLoading ? '⏳' : '🔄 Refresh'}
-          </button>
+        {/* Search & Segmented Filter Controls */}
+        <div style={styles.controlsSection}>
+          <input
+            type="text"
+            placeholder="Search waybill, customer, or destination..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={styles.searchBar}
+          />
+
+          <div style={styles.segmentedTabBar}>
+            <button
+              onClick={() => setFilterTab('active')}
+              style={{
+                ...styles.tabBtn,
+                backgroundColor: filterTab === 'active' ? '#0284c7' : 'transparent',
+                color: filterTab === 'active' ? '#ffffff' : '#94a3b8',
+              }}
+            >
+              Active ({pendingPickup.length + inTransit.length})
+            </button>
+            <button
+              onClick={() => setFilterTab('transit')}
+              style={{
+                ...styles.tabBtn,
+                backgroundColor: filterTab === 'transit' ? '#0284c7' : 'transparent',
+                color: filterTab === 'transit' ? '#ffffff' : '#94a3b8',
+              }}
+            >
+              In Transit ({inTransit.length})
+            </button>
+            <button
+              onClick={() => setFilterTab('completed')}
+              style={{
+                ...styles.tabBtn,
+                backgroundColor: filterTab === 'completed' ? '#0284c7' : 'transparent',
+                color: filterTab === 'completed' ? '#ffffff' : '#94a3b8',
+              }}
+            >
+              Done ({completed.length})
+            </button>
+            <button
+              onClick={() => setFilterTab('all')}
+              style={{
+                ...styles.tabBtn,
+                backgroundColor: filterTab === 'all' ? '#0284c7' : 'transparent',
+                color: filterTab === 'all' ? '#ffffff' : '#94a3b8',
+              }}
+            >
+              All ({deliveries.length})
+            </button>
+          </div>
         </div>
 
         {/* Deliveries List */}
-        {activeJobs.length === 0 ? (
+        {filteredDeliveries.length === 0 ? (
           <div style={styles.emptyState}>
             <div style={styles.emptyIcon}>📦</div>
-            <h3 style={styles.emptyTitle}>No active delivery tasks</h3>
+            <h3 style={styles.emptyTitle}>No deliveries in this section</h3>
             <p style={styles.emptyText}>
-              Stay online. Incoming orders assigned by Dispatch will appear here automatically with sound & vibration alerts.
+              Deliveries assigned by Dispatch on Railway will appear here in real-time.
             </p>
-
-            <button
-              onClick={onAddSampleDelivery}
-              style={styles.sampleDeliveryBtn}
-            >
-              ➕ Load Sample Demo Delivery
+            <button onClick={onRefresh} style={styles.emptyRefreshBtn}>
+              🔄 Refresh List
             </button>
           </div>
         ) : (
           <div style={styles.deliveriesList}>
-            {activeJobs.map((delivery) => (
+            {filteredDeliveries.map((delivery) => (
               <DeliveryCard
                 key={delivery.id}
                 delivery={delivery}
-                onSelect={onSelectDelivery}
+                onSelect={(d) => {
+                  if (d.status === 'PICKED_UP') {
+                    onSelectDelivery(d);
+                  } else {
+                    setSelectedDetailDelivery(d);
+                  }
+                }}
+                onPickupClick={(d) => setPickupConfirmDelivery(d)}
               />
             ))}
           </div>
         )}
-
-        {/* Completed deliveries history */}
-        {completedJobs.length > 0 && (
-          <div style={styles.historySection}>
-            <h3 style={styles.historyTitle}>Completed Today ({completedJobs.length})</h3>
-            <div style={styles.historyList}>
-              {completedJobs.map((item) => (
-                <div key={item.id} style={styles.historyItem}>
-                  <div>
-                    <span style={styles.historyOrderId}>#{item.id.slice(0, 8)}</span>
-                    <p style={styles.historyDropoff}>{item.dropoffAddress}</p>
-                  </div>
-                  <span style={styles.historyBadge}>✓ DELIVERED</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
+
+      {/* ─── Modals ─── */}
+      {/* 1. Delivery Details Modal */}
+      <DeliveryDetailModal
+        isOpen={Boolean(selectedDetailDelivery)}
+        delivery={selectedDetailDelivery}
+        onClose={() => setSelectedDetailDelivery(null)}
+        onStartPickup={(d) => {
+          setSelectedDetailDelivery(null);
+          setPickupConfirmDelivery(d);
+        }}
+        onContinueDropoff={(d) => {
+          setSelectedDetailDelivery(null);
+          onSelectDelivery(d);
+        }}
+      />
+
+      {/* 2. Pickup Confirmation Modal */}
+      <PickupConfirmModal
+        isOpen={Boolean(pickupConfirmDelivery)}
+        delivery={pickupConfirmDelivery}
+        onClose={() => setPickupConfirmDelivery(null)}
+        onConfirm={async (d) => {
+          await onConfirmPickup(d.id, riderId);
+          onSelectDelivery({ ...d, status: 'PICKED_UP' });
+        }}
+      />
+
+      {/* 3. Rider Switcher Modal */}
+      <RiderSwitcherModal
+        isOpen={isSwitcherOpen}
+        currentRiderId={riderId}
+        onClose={() => setIsSwitcherOpen(false)}
+        onSelectRider={(newId) => onRiderIdChange(newId)}
+      />
     </div>
   );
 }
@@ -189,21 +263,24 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     minHeight: '100vh',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#090d16',
     color: '#f8fafc',
     boxSizing: 'border-box',
     paddingBottom: '80px',
+    fontFamily: '"Inter", -apple-system, system-ui, sans-serif',
   },
   header: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#0f172a',
     padding: '16px',
-    borderBottom: '1px solid #334155',
+    borderBottom: '1px solid #1e293b',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
   },
-  brandingRow: {
+  topRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '12px',
   },
   brandGroup: {
     display: 'flex',
@@ -219,24 +296,31 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '20px',
+    boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)',
   },
   appTitle: {
     margin: 0,
-    fontSize: '18px',
-    fontWeight: 'bold',
-    color: '#f8fafc',
+    fontSize: '17px',
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: '0.3px',
   },
   regionTag: {
     fontSize: '11px',
     color: '#38bdf8',
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  statusGroup: {
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  livePill: {
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
-    backgroundColor: '#0f172a',
-    padding: '4px 10px',
+    backgroundColor: '#1e293b',
+    padding: '5px 10px',
     borderRadius: '20px',
     border: '1px solid #334155',
   },
@@ -248,215 +332,205 @@ const styles = {
   socketText: {
     fontSize: '11px',
     fontWeight: 'bold',
-    color: '#94a3b8',
+    color: '#cbd5e1',
+  },
+  refreshIconBtn: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    color: '#38bdf8',
+    borderRadius: '10px',
+    padding: '6px 10px',
+    fontSize: '14px',
+    cursor: 'pointer',
   },
   riderBar: {
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
-    padding: '8px 12px',
-    borderRadius: '10px',
-  },
-  riderInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  riderRole: {
-    fontSize: '12px',
-    color: '#94a3b8',
-  },
-  riderBadge: {
-    fontSize: '12px',
-    fontWeight: 'bold',
-    color: '#38bdf8',
-    backgroundColor: 'rgba(56, 189, 248, 0.1)',
-    padding: '2px 6px',
-    borderRadius: '4px',
-  },
-  switchRiderBtn: {
-    background: 'none',
-    border: 'none',
-    color: '#94a3b8',
-    fontSize: '12px',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    textDecoration: 'underline',
-  },
-  pickerDrawer: {
-    marginTop: '12px',
-    backgroundColor: '#0f172a',
-    padding: '12px',
-    borderRadius: '10px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  presetButtons: {
-    display: 'flex',
-    gap: '6px',
-    flexWrap: 'wrap',
-  },
-  presetBtn: {
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '6px 10px',
-    fontSize: '11px',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-  },
-  customIdForm: {
-    display: 'flex',
-    gap: '6px',
-  },
-  customIdInput: {
-    flex: 1,
-    padding: '8px 10px',
+    gap: '12px',
     backgroundColor: '#1e293b',
+    padding: '10px 14px',
+    borderRadius: '14px',
     border: '1px solid #334155',
-    borderRadius: '6px',
-    color: '#fff',
-    fontSize: '12px',
+    cursor: 'pointer',
   },
-  customIdSubmit: {
+  riderAvatar: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
     backgroundColor: '#0284c7',
     color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '8px 14px',
-    fontSize: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: '800',
+    fontSize: '15px',
+  },
+  riderInfo: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  riderRole: {
+    fontSize: '10px',
+    color: '#94a3b8',
     fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  riderNameText: {
+    fontSize: '14px',
+    color: '#f8fafc',
+  },
+  switchPillBtn: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #334155',
+    color: '#38bdf8',
+    fontSize: '11px',
+    fontWeight: 'bold',
+    padding: '6px 10px',
+    borderRadius: '8px',
     cursor: 'pointer',
+  },
+  kpiRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '8px',
+  },
+  kpiCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: '12px',
+    padding: '10px',
+    textAlign: 'center',
+    border: '1px solid #334155',
+    cursor: 'pointer',
+  },
+  kpiValue: {
+    fontSize: '18px',
+    fontWeight: '900',
+    color: '#fde047',
+    display: 'block',
+  },
+  kpiLabel: {
+    fontSize: '10px',
+    color: '#94a3b8',
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    marginTop: '2px',
+    display: 'block',
   },
   main: {
     padding: '16px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    gap: '14px',
   },
   inTransitBanner: {
     backgroundColor: 'rgba(2, 132, 199, 0.15)',
-    border: '1px solid #0284c7',
-    borderRadius: '14px',
+    border: '1.5px solid #0284c7',
+    borderRadius: '16px',
     padding: '14px 16px',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: '12px',
+    boxShadow: '0 4px 14px rgba(2, 132, 199, 0.2)',
+  },
+  bannerLeft: {
+    flex: 1,
   },
   inTransitLabel: {
     fontSize: '11px',
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#38bdf8',
     letterSpacing: '0.5px',
+    display: 'block',
   },
   inTransitText: {
     margin: '2px 0 0 0',
     fontSize: '13px',
     color: '#f8fafc',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   resumeBtn: {
     backgroundColor: '#0284c7',
     color: '#fff',
     border: 'none',
-    padding: '10px 14px',
-    borderRadius: '8px',
+    padding: '10px 16px',
+    borderRadius: '10px',
     fontSize: '12px',
     fontWeight: 'bold',
     cursor: 'pointer',
+    flexShrink: 0,
   },
-  sectionHeader: {
+  controlsSection: {
     display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    gap: '10px',
   },
-  sectionTitle: {
-    margin: 0,
-    fontSize: '16px',
-    fontWeight: 'bold',
-    color: '#f8fafc',
-  },
-  refreshBtn: {
-    background: 'none',
+  searchBar: {
+    width: '100%',
+    padding: '12px 14px',
+    backgroundColor: '#0f172a',
     border: '1px solid #334155',
-    color: '#94a3b8',
+    borderRadius: '12px',
+    color: '#ffffff',
+    fontSize: '13px',
+    outline: 'none',
+  },
+  segmentedTabBar: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    backgroundColor: '#0f172a',
+    borderRadius: '10px',
+    padding: '4px',
+    border: '1px solid #1e293b',
+  },
+  tabBtn: {
+    border: 'none',
+    padding: '8px 4px',
     borderRadius: '8px',
-    padding: '6px 12px',
-    fontSize: '12px',
+    fontSize: '11px',
+    fontWeight: 'bold',
     cursor: 'pointer',
+    transition: 'all 0.2s',
   },
   deliveriesList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
+    gap: '12px',
   },
   emptyState: {
-    backgroundColor: '#1e293b',
-    borderRadius: '16px',
+    backgroundColor: '#0f172a',
+    borderRadius: '18px',
     padding: '36px 20px',
     textAlign: 'center',
     border: '1px dashed #334155',
+    marginTop: '10px',
   },
   emptyIcon: {
     fontSize: '44px',
-    marginBottom: '12px',
+    marginBottom: '10px',
   },
   emptyTitle: {
-    margin: '0 0 8px 0',
+    margin: '0 0 6px 0',
     fontSize: '16px',
     fontWeight: 'bold',
   },
   emptyText: {
-    margin: '0 0 20px 0',
+    margin: '0 0 18px 0',
     fontSize: '13px',
     color: '#94a3b8',
     lineHeight: '1.4',
   },
-  sampleDeliveryBtn: {
-    backgroundColor: '#0284c7',
-    color: '#fff',
-    border: 'none',
-    padding: '12px 20px',
-    borderRadius: '10px',
-    fontSize: '14px',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-  },
-  historySection: {
-    marginTop: '12px',
-  },
-  historyTitle: {
-    margin: '0 0 10px 0',
-    fontSize: '14px',
-    color: '#94a3b8',
-  },
-  historyList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  historyItem: {
+  emptyRefreshBtn: {
     backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    color: '#38bdf8',
+    padding: '10px 18px',
     borderRadius: '10px',
-    padding: '12px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  historyOrderId: {
     fontSize: '13px',
     fontWeight: 'bold',
-    color: '#f8fafc',
-  },
-  historyDropoff: {
-    margin: '2px 0 0 0',
-    fontSize: '12px',
-    color: '#94a3b8',
-  },
-  historyBadge: {
-    fontSize: '11px',
-    color: '#4ade80',
-    fontWeight: 'bold',
+    cursor: 'pointer',
   },
 };
