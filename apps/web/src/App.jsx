@@ -83,13 +83,14 @@ export default function App() {
   const [notification, setNotification] = useState(null);
 
   // Fleet Riders Management State
+  const [retailerSubTab, setRetailerSubTab] = useState('dispatches'); // 'dispatches' | 'riders'
   const [isRegisterRiderModalOpen, setIsRegisterRiderModalOpen] = useState(false);
   const [registeredRiderSuccess, setRegisteredRiderSuccess] = useState(null);
   const [riderFormData, setRiderFormData] = useState({
     name: '',
     phone: '',
     email: '',
-    hub: 'Westlands Hub'
+    hub: 'Kamau Electronics (Westlands Hub)'
   });
   const [riderFormErrors, setRiderFormErrors] = useState({});
   const [isSubmittingRider, setIsSubmittingRider] = useState(false);
@@ -1246,28 +1247,34 @@ export default function App() {
         <div style={styles.navCenter}>
           <div style={styles.segmentedControl}>
             <button
-              style={{ ...styles.segmentButton, ...(activeTab === 'retailer' ? styles.segmentActive : {}) }}
-              onClick={() => setActiveTab('retailer')}
+              style={{ ...styles.segmentButton, ...(activeTab === 'retailer' && retailerSubTab === 'dispatches' ? styles.segmentActive : {}) }}
+              onClick={() => {
+                setActiveTab('retailer');
+                setRetailerSubTab('dispatches');
+              }}
             >
-              🏪 Retailer Portal
+              🏪 Retailer Orders
+            </button>
+            <button
+              style={{ ...styles.segmentButton, ...(activeTab === 'retailer' && retailerSubTab === 'riders' ? styles.segmentActive : {}) }}
+              onClick={() => {
+                setActiveTab('retailer');
+                setRetailerSubTab('riders');
+              }}
+            >
+              👥 My Hired Riders ({riders.length})
             </button>
             <button
               style={{ ...styles.segmentButton, ...(activeTab === 'dispatcher' ? styles.segmentActive : {}) }}
               onClick={() => setActiveTab('dispatcher')}
             >
-              🎛️ Dispatcher
-            </button>
-            <button
-              style={{ ...styles.segmentButton, ...(activeTab === 'riders' ? styles.segmentActive : {}) }}
-              onClick={() => setActiveTab('riders')}
-            >
-              👥 Fleet Riders ({riders.length})
+              🎛️ Dispatcher Center
             </button>
             <button
               style={{ ...styles.segmentButton, ...(activeTab === 'rider' ? styles.segmentActive : {}) }}
               onClick={() => setActiveTab('rider')}
             >
-              🏍️ Rider Portal
+              🏍️ Rider PWA
             </button>
           </div>
         </div>
@@ -1675,554 +1682,754 @@ export default function App() {
           </div>
         )}
 
-        {/* ── TAB 2: RETAILER PORTAL & NEW DELIVERY REQUEST ── */}
+        {/* ── TAB 2: RETAILER PORTAL (ORDERS & MY HIRED RIDERS) ── */}
         {activeTab === 'retailer' && (
           <div style={styles.retailerPortalWrapper}>
             {/* Top Retailer Toolbar */}
             <div style={styles.retailerToolbar}>
               <div>
-                <h2 style={styles.retailerHubTitle}>🏪 Retailer Delivery Hub</h2>
+                <h2 style={styles.retailerHubTitle}>🏪 Retailer Business Hub</h2>
                 <p style={styles.retailerHubDesc}>
-                  Create customer delivery dispatches, monitor real-time fulfillment, and generate verification QR slips.
+                  Create customer deliveries, hire dedicated store couriers, generate PWA onboarding links, and audit live fulfillment.
                 </p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <button
-                  style={styles.openNewDeliveryBtn}
-                  onClick={() => {
-                    const formEl = document.getElementById('new-delivery-request-form');
-                    if (formEl) {
-                      formEl.scrollIntoView({ behavior: 'smooth' });
-                    } else {
-                      setIsNewDeliveryModalOpen(true);
-                    }
-                  }}
-                >
-                  ✨ + New Delivery Request
-                </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={styles.segmentedControlMini}>
+                  <button
+                    style={{
+                      ...styles.segmentButtonMini,
+                      ...(retailerSubTab === 'dispatches' ? styles.segmentActiveMini : {})
+                    }}
+                    onClick={() => setRetailerSubTab('dispatches')}
+                  >
+                    📦 Orders &amp; Dispatches
+                  </button>
+                  <button
+                    style={{
+                      ...styles.segmentButtonMini,
+                      ...(retailerSubTab === 'riders' ? styles.segmentActiveMini : {})
+                    }}
+                    onClick={() => setRetailerSubTab('riders')}
+                  >
+                    👥 My Hired Riders ({riders.length})
+                  </button>
+                </div>
+
+                {retailerSubTab === 'dispatches' ? (
+                  <button
+                    style={styles.openNewDeliveryBtn}
+                    onClick={() => {
+                      const formEl = document.getElementById('new-delivery-request-form');
+                      if (formEl) {
+                        formEl.scrollIntoView({ behavior: 'smooth' });
+                      } else {
+                        setIsNewDeliveryModalOpen(true);
+                      }
+                    }}
+                  >
+                    ✨ + New Delivery Request
+                  </button>
+                ) : (
+                  <button
+                    style={styles.openNewDeliveryBtn}
+                    onClick={() => {
+                      setRiderFormData({
+                        name: '',
+                        phone: '',
+                        email: '',
+                        hub: 'Kamau Electronics (Westlands Hub)'
+                      });
+                      setRiderFormErrors({});
+                      setIsRegisterRiderModalOpen(true);
+                    }}
+                  >
+                    ➕ + Hire New Rider for My Store
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* ─── NEW DELIVERY REQUEST WORKBENCH ─── */}
-            <div id="new-delivery-request-form" style={styles.newDeliveryContainer}>
-              {/* Header */}
-              <div style={styles.newDeliveryHeader}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={styles.newDeliveryIconBadge}>📦</div>
-                  <div>
-                    <h2 style={styles.newDeliveryTitle}>New Delivery Request</h2>
-                    <div style={styles.zoneRoutingIndicator}>
-                      <span style={styles.zonePulseDot} />
-                      <span style={styles.zoneRoutingText}>
-                        Routing: Smart Auto-Zone ({formData.zone || 'Westlands'})
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button
-                    type="button"
-                    style={styles.resetFormBtn}
-                    onClick={() => {
-                      setFormData({
-                        customerName: '',
-                        customerPhone: '',
-                        zone: 'Westlands',
-                        priority: 'Normal',
-                        address: '',
-                        itemDescription: '',
-                        reference: '',
-                        packageValue: '',
-                        deliveryFee: '250',
-                        riderNotes: ''
-                      });
-                      setFormErrors({});
-                      showNotification('Form cleared');
-                    }}
-                    title="Clear entered details"
-                  >
-                    🔄 Clear Form
-                  </button>
-                </div>
-              </div>
-
-              {/* Main Content: Left Form & Right Live Delivery Summary */}
-              <div style={styles.newDeliveryLayout}>
-                {/* ─── LEFT: 10 FORM FIELDS ─── */}
-                <form onSubmit={handleCreateDeliveryRequest} style={styles.newDeliveryForm}>
-                  {/* Row 1: Customer Name & Phone */}
-                  <div style={styles.formRow2}>
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>
-                        Customer Name <span style={styles.requiredAsterisk}>*</span>
-                      </label>
-                      <input
-                        style={{
-                          ...styles.fieldInput,
-                          borderColor: formErrors.customerName ? '#ef4444' : '#334155',
-                          backgroundColor: formErrors.customerName ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
-                        }}
-                        value={formData.customerName}
-                        onChange={(e) => handleInputChange('customerName', e.target.value)}
-                        placeholder="e.g. John / Amina Wanjiru"
-                      />
-                      {formErrors.customerName && (
-                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerName}</span>
-                      )}
-                    </div>
-
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>
-                        Customer Phone Number <span style={styles.requiredAsterisk}>*</span>
-                      </label>
-                      <input
-                        style={{
-                          ...styles.fieldInput,
-                          borderColor: formErrors.customerPhone ? '#ef4444' : '#334155',
-                          backgroundColor: formErrors.customerPhone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
-                        }}
-                        value={formData.customerPhone}
-                        onChange={(e) => handleInputChange('customerPhone', e.target.value)}
-                        placeholder="e.g. +254712345678 or 0712345678"
-                      />
-                      {formErrors.customerPhone && (
-                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerPhone}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Row 2: Delivery Zone & Priority */}
-                  <div style={styles.formRow2}>
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>
-                        Delivery Nairobi Zone <span style={styles.requiredAsterisk}>*</span>
-                      </label>
-                      <select
-                        style={{
-                          ...styles.fieldSelect,
-                          borderColor: formErrors.zone ? '#ef4444' : '#334155',
-                          backgroundColor: formErrors.zone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
-                        }}
-                        value={formData.zone}
-                        onChange={(e) => handleInputChange('zone', e.target.value)}
-                      >
-                        {NAIROBI_ZONES.map((z) => (
-                          <option key={z} value={z}>
-                            📍 {z} (Base KES {ZONE_BASE_FEES[z] || 250})
-                          </option>
-                        ))}
-                      </select>
-                      {formErrors.zone && (
-                        <span style={styles.fieldErrorText}>⚠️ {formErrors.zone}</span>
-                      )}
-                    </div>
-
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>Priority Level</label>
-                      <select
-                        style={styles.fieldSelect}
-                        value={formData.priority}
-                        onChange={(e) => handleInputChange('priority', e.target.value)}
-                      >
-                        {PRIORITY_LEVELS.map((p) => (
-                          <option key={p} value={p}>
-                            {p === 'Urgent' ? '⚡ Urgent (+KES 100)' : p === 'High' ? '🔥 High (+KES 50)' : '📦 Normal Priority'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Row 3: Specific Address & Landmarks */}
-                  <div style={styles.fieldGroup}>
-                    <label style={styles.fieldLabel}>
-                      Specific Delivery Address &amp; Landmarks <span style={styles.requiredAsterisk}>*</span>
-                    </label>
-                    <textarea
-                      style={{
-                        ...styles.fieldTextarea,
-                        borderColor: formErrors.address ? '#ef4444' : '#334155',
-                        backgroundColor: formErrors.address ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
-                      }}
-                      value={formData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      placeholder="Building name, floor, apartment, landmark, street name..."
-                      rows={3}
-                    />
-                    {formErrors.address && (
-                      <span style={styles.fieldErrorText}>⚠️ {formErrors.address}</span>
-                    )}
-                  </div>
-
-                  {/* Row 4: Item Description & Internal Reference */}
-                  <div style={styles.formRow2}>
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>
-                        Item / Order Description <span style={styles.requiredAsterisk}>*</span>
-                      </label>
-                      <input
-                        style={{
-                          ...styles.fieldInput,
-                          borderColor: formErrors.itemDescription ? '#ef4444' : '#334155',
-                          backgroundColor: formErrors.itemDescription ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
-                        }}
-                        value={formData.itemDescription}
-                        onChange={(e) => handleInputChange('itemDescription', e.target.value)}
-                        placeholder="e.g. Laptop - HP ProBook 450"
-                      />
-                      {formErrors.itemDescription && (
-                        <span style={styles.fieldErrorText}>⚠️ {formErrors.itemDescription}</span>
-                      )}
-                    </div>
-
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>Internal Reference # (Optional)</label>
-                      <input
-                        style={styles.fieldInput}
-                        value={formData.reference}
-                        onChange={(e) => handleInputChange('reference', e.target.value)}
-                        placeholder="e.g. ORD-20465"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Row 5: Package Value & Delivery Fee */}
-                  <div style={styles.formRow2}>
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>Package Value (KES)</label>
-                      <div style={styles.currencyInputContainer}>
-                        <span style={styles.currencyPrefixBadge}>KES</span>
-                        <input
-                          type="number"
-                          min="0"
-                          style={{
-                            ...styles.currencyInput,
-                            borderColor: formErrors.packageValue ? '#ef4444' : '#334155'
-                          }}
-                          value={formData.packageValue}
-                          onChange={(e) => handleInputChange('packageValue', e.target.value)}
-                          placeholder="e.g. 35000"
-                        />
-                      </div>
-                      {formErrors.packageValue && (
-                        <span style={styles.fieldErrorText}>⚠️ {formErrors.packageValue}</span>
-                      )}
-                    </div>
-
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>Delivery Fee (KES)</label>
-                      <div style={styles.currencyInputContainer}>
-                        <span style={styles.currencyPrefixBadge}>KES</span>
-                        <input
-                          type="number"
-                          min="0"
-                          style={{
-                            ...styles.currencyInput,
-                            borderColor: formErrors.deliveryFee ? '#ef4444' : '#334155'
-                          }}
-                          value={formData.deliveryFee}
-                          onChange={(e) => handleInputChange('deliveryFee', e.target.value)}
-                          placeholder="e.g. 250"
-                        />
-                      </div>
-                      {formErrors.deliveryFee && (
-                        <span style={styles.fieldErrorText}>⚠️ {formErrors.deliveryFee}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Row 6: Rider Handling Notes */}
-                  <div style={styles.fieldGroup}>
-                    <label style={styles.fieldLabel}>Rider Handling Notes (Optional)</label>
-                    <textarea
-                      style={styles.fieldTextarea}
-                      value={formData.riderNotes}
-                      onChange={(e) => handleInputChange('riderNotes', e.target.value)}
-                      placeholder="Handle with care, fragile electronics. Call upon reaching gate..."
-                      rows={2}
-                    />
-                  </div>
-
-                  {/* Bottom Actions */}
-                  <div style={styles.formActionsRow}>
-                    <button
-                      type="button"
-                      style={styles.btnCancel}
-                      onClick={() => {
-                        setFormData({
-                          customerName: '',
-                          customerPhone: '',
-                          zone: 'Westlands',
-                          priority: 'Normal',
-                          address: '',
-                          itemDescription: '',
-                          reference: '',
-                          packageValue: '',
-                          deliveryFee: '250',
-                          riderNotes: ''
-                        });
-                        setFormErrors({});
-                      }}
-                      disabled={isSubmittingDelivery}
-                    >
-                      Cancel
-                    </button>
-
-                    <button
-                      type="submit"
-                      style={{
-                        ...styles.btnSubmitGreen,
-                        opacity: isSubmittingDelivery ? 0.7 : 1,
-                        cursor: isSubmittingDelivery ? 'not-allowed' : 'pointer'
-                      }}
-                      disabled={isSubmittingDelivery}
-                    >
-                      {isSubmittingDelivery ? 'Creating Delivery...' : '🚀 Submit & Generate QR Slip'}
-                    </button>
-                  </div>
-                </form>
-
-                {/* ─── RIGHT: LIVE DELIVERY SUMMARY PANEL ─── */}
-                <div style={styles.summaryCard}>
-                  <div style={styles.summaryCardHeader}>
-                    <div>
-                      <span style={styles.summarySubTag}>REAL-TIME PREVIEW</span>
-                      <h3 style={styles.summaryHeading}>Delivery Summary</h3>
-                    </div>
-                    <span style={styles.summaryLiveTag}>● Live</span>
-                  </div>
-
-                  <div style={styles.summaryBody}>
-                    <div style={styles.summaryItem}>
-                      <span style={styles.summaryLabel}>Customer</span>
-                      <strong style={styles.summaryValue}>
-                        {formData.customerName.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
-                      </strong>
-                    </div>
-
-                    <div style={styles.summaryItem}>
-                      <span style={styles.summaryLabel}>Phone</span>
-                      <strong style={styles.summaryValue}>
-                        {formData.customerPhone.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
-                      </strong>
-                    </div>
-
-                    <div style={styles.summaryItem}>
-                      <span style={styles.summaryLabel}>Zone</span>
-                      <strong style={styles.summaryValue}>
-                        {formData.zone ? `📍 ${formData.zone}` : <em style={styles.emptyPlaceholder}>Not selected</em>}
-                      </strong>
-                    </div>
-
-                    <div style={styles.summaryItem}>
-                      <span style={styles.summaryLabel}>Address</span>
-                      <span style={styles.summaryValueMultiline}>
-                        {formData.address.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
-                      </span>
-                    </div>
-
-                    <div style={styles.summaryItem}>
-                      <span style={styles.summaryLabel}>Item / Description</span>
-                      <strong style={styles.summaryValue}>
-                        {formData.itemDescription.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
-                      </strong>
-                    </div>
-
-                    <div style={styles.summaryDivider} />
-
-                    <div style={styles.summaryRowInline}>
+            {/* ── SUB-TAB 1: ORDERS & DISPATCHES ── */}
+            {retailerSubTab === 'dispatches' && (
+              <>
+                {/* ─── NEW DELIVERY REQUEST WORKBENCH ─── */}
+                <div id="new-delivery-request-form" style={styles.newDeliveryContainer}>
+                  {/* Header */}
+                  <div style={styles.newDeliveryHeader}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={styles.newDeliveryIconBadge}>📦</div>
                       <div>
-                        <span style={styles.summaryLabel}>Priority</span>
-                        <div style={{ marginTop: '2px' }}>
-                          <span
-                            style={{
-                              ...styles.summaryPriorityBadge,
-                              backgroundColor:
-                                formData.priority === 'Urgent'
-                                  ? 'rgba(239, 68, 68, 0.2)'
-                                  : formData.priority === 'High'
-                                  ? 'rgba(245, 158, 11, 0.2)'
-                                  : 'rgba(34, 197, 94, 0.2)',
-                              color:
-                                formData.priority === 'Urgent'
-                                  ? '#f87171'
-                                  : formData.priority === 'High'
-                                  ? '#fbbf24'
-                                  : '#4ade80',
-                              borderColor:
-                                formData.priority === 'Urgent'
-                                  ? '#ef4444'
-                                  : formData.priority === 'High'
-                                  ? '#f59e0b'
-                                  : '#22c55e'
-                            }}
-                          >
-                            {formData.priority === 'Urgent' ? '⚡ Urgent' : formData.priority === 'High' ? '🔥 High' : '📦 Normal'}
+                        <h2 style={styles.newDeliveryTitle}>New Delivery Request</h2>
+                        <div style={styles.zoneRoutingIndicator}>
+                          <span style={styles.zonePulseDot} />
+                          <span style={styles.zoneRoutingText}>
+                            Routing: Smart Auto-Zone ({formData.zone || 'Westlands'})
                           </span>
                         </div>
                       </div>
-
-                      <div>
-                        <span style={styles.summaryLabel}>Package Value</span>
-                        <strong style={styles.summaryValueHighlight}>
-                          {formData.packageValue
-                            ? `KES ${Number(formData.packageValue).toLocaleString()}`
-                            : <em style={styles.emptyPlaceholder}>Not provided</em>}
-                        </strong>
-                      </div>
                     </div>
 
-                    <div style={styles.summaryDivider} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        type="button"
+                        style={styles.resetFormBtn}
+                        onClick={() => {
+                          setFormData({
+                            customerName: '',
+                            customerPhone: '',
+                            zone: 'Westlands',
+                            priority: 'Normal',
+                            address: '',
+                            itemDescription: '',
+                            reference: '',
+                            packageValue: '',
+                            deliveryFee: '250',
+                            riderNotes: ''
+                          });
+                          setFormErrors({});
+                          showNotification('Form cleared');
+                        }}
+                        title="Clear entered details"
+                      >
+                        🔄 Clear Form
+                      </button>
+                    </div>
+                  </div>
 
-                    <div style={styles.summaryRowInline}>
-                      <div>
-                        <span style={styles.summaryLabel}>Delivery Fee</span>
-                        <strong style={styles.summaryFeeHighlight}>
-                          {formData.deliveryFee
-                            ? `KES ${Number(formData.deliveryFee).toLocaleString()}`
-                            : <em style={styles.emptyPlaceholder}>Not provided</em>}
-                        </strong>
+                  {/* Main Content: Left Form & Right Live Delivery Summary */}
+                  <div style={styles.newDeliveryLayout}>
+                    {/* ─── LEFT: 10 FORM FIELDS ─── */}
+                    <form onSubmit={handleCreateDeliveryRequest} style={styles.newDeliveryForm}>
+                      {/* Row 1: Customer Name & Phone */}
+                      <div style={styles.formRow2}>
+                        <div style={styles.fieldGroup}>
+                          <label style={styles.fieldLabel}>
+                            Customer Name <span style={styles.requiredAsterisk}>*</span>
+                          </label>
+                          <input
+                            style={{
+                              ...styles.fieldInput,
+                              borderColor: formErrors.customerName ? '#ef4444' : '#334155',
+                              backgroundColor: formErrors.customerName ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                            }}
+                            value={formData.customerName}
+                            onChange={(e) => handleInputChange('customerName', e.target.value)}
+                            placeholder="e.g. John / Amina Wanjiru"
+                          />
+                          {formErrors.customerName && (
+                            <span style={styles.fieldErrorText}>⚠️ {formErrors.customerName}</span>
+                          )}
+                        </div>
+
+                        <div style={styles.fieldGroup}>
+                          <label style={styles.fieldLabel}>
+                            Customer Phone Number <span style={styles.requiredAsterisk}>*</span>
+                          </label>
+                          <input
+                            style={{
+                              ...styles.fieldInput,
+                              borderColor: formErrors.customerPhone ? '#ef4444' : '#334155',
+                              backgroundColor: formErrors.customerPhone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                            }}
+                            value={formData.customerPhone}
+                            onChange={(e) => handleInputChange('customerPhone', e.target.value)}
+                            placeholder="e.g. +254712345678 or 0712345678"
+                          />
+                          {formErrors.customerPhone && (
+                            <span style={styles.fieldErrorText}>⚠️ {formErrors.customerPhone}</span>
+                          )}
+                        </div>
                       </div>
 
-                      <div>
-                        <span style={styles.summaryLabel}>Estimated Time</span>
-                        <div style={styles.summaryEtaBadge}>
-                          ⏱️ {getEstimatedDeliveryTime(formData.zone, formData.priority)}
+                      {/* Row 2: Delivery Zone & Priority */}
+                      <div style={styles.formRow2}>
+                        <div style={styles.fieldGroup}>
+                          <label style={styles.fieldLabel}>
+                            Delivery Nairobi Zone <span style={styles.requiredAsterisk}>*</span>
+                          </label>
+                          <select
+                            style={{
+                              ...styles.fieldSelect,
+                              borderColor: formErrors.zone ? '#ef4444' : '#334155',
+                              backgroundColor: '#1e293b'
+                            }}
+                            value={formData.zone}
+                            onChange={(e) => handleInputChange('zone', e.target.value)}
+                          >
+                            <option value="Westlands">Westlands (KES 250 • ~35m)</option>
+                            <option value="Kilimani">Kilimani / Kileleshwa (KES 200 • ~25m)</option>
+                            <option value="CBD">Nairobi CBD (KES 150 • ~20m)</option>
+                            <option value="Eastlands">Eastlands / Buruburu (KES 350 • ~50m)</option>
+                            <option value="Karen">Karen / Langata (KES 400 • ~60m)</option>
+                            <option value="Industrial Area">Industrial Area (KES 250 • ~30m)</option>
+                            <option value="Kasarani">Kasarani / Thika Rd (KES 350 • ~45m)</option>
+                          </select>
+                        </div>
+
+                        <div style={styles.fieldGroup}>
+                          <label style={styles.fieldLabel}>
+                            Dispatch Priority <span style={styles.requiredAsterisk}>*</span>
+                          </label>
+                          <div style={styles.priorityToggleGroup}>
+                            {['Express', 'Normal', 'Scheduled'].map((p) => {
+                              const isSelected = formData.priority === p;
+                              return (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  style={{
+                                    ...styles.priorityToggleBtn,
+                                    ...(isSelected ? styles.priorityToggleBtnActive : {}),
+                                    ...(isSelected && p === 'Express' ? { backgroundColor: '#e11d48', borderColor: '#f43f5e' } : {}),
+                                    ...(isSelected && p === 'Scheduled' ? { backgroundColor: '#475569', borderColor: '#94a3b8' } : {})
+                                  }}
+                                  onClick={() => handleInputChange('priority', p)}
+                                >
+                                  {p === 'Express' ? '⚡ Express' : p === 'Normal' ? '🚀 Normal' : '🕒 Scheduled'}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Row 3: Destination Delivery Address */}
+                      <div style={styles.fieldGroup}>
+                        <label style={styles.fieldLabel}>
+                          Full Destination Address <span style={styles.requiredAsterisk}>*</span>
+                        </label>
+                        <input
+                          style={{
+                            ...styles.fieldInput,
+                            borderColor: formErrors.address ? '#ef4444' : '#334155',
+                            backgroundColor: formErrors.address ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                          }}
+                          value={formData.address}
+                          onChange={(e) => handleInputChange('address', e.target.value)}
+                          placeholder="Building, Street, Landmark, Floor or Office Number"
+                        />
+                        {formErrors.address && (
+                          <span style={styles.fieldErrorText}>⚠️ {formErrors.address}</span>
+                        )}
+                      </div>
+
+                      {/* Row 4: Package Description & Reference Code */}
+                      <div style={styles.formRow2}>
+                        <div style={styles.fieldGroup}>
+                          <label style={styles.fieldLabel}>
+                            Item / Package Description <span style={styles.requiredAsterisk}>*</span>
+                          </label>
+                          <input
+                            style={{
+                              ...styles.fieldInput,
+                              borderColor: formErrors.itemDescription ? '#ef4444' : '#334155',
+                              backgroundColor: formErrors.itemDescription ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                            }}
+                            value={formData.itemDescription}
+                            onChange={(e) => handleInputChange('itemDescription', e.target.value)}
+                            placeholder="e.g. HP ProBook 450 G8 / iPhone 15"
+                          />
+                          {formErrors.itemDescription && (
+                            <span style={styles.fieldErrorText}>⚠️ {formErrors.itemDescription}</span>
+                          )}
+                        </div>
+
+                        <div style={styles.fieldGroup}>
+                          <label style={styles.fieldLabel}>
+                            Store Order / Ref # <span style={styles.optionalTag}>(Optional)</span>
+                          </label>
+                          <input
+                            style={styles.fieldInput}
+                            value={formData.reference}
+                            onChange={(e) => handleInputChange('reference', e.target.value)}
+                            placeholder="e.g. ORD-20465"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Row 5: Package Value & Delivery Fee */}
+                      <div style={styles.formRow2}>
+                        <div style={styles.fieldGroup}>
+                          <label style={styles.fieldLabel}>
+                            Declared Value (KES) <span style={styles.optionalTag}>(Insurance)</span>
+                          </label>
+                          <input
+                            type="number"
+                            style={styles.fieldInput}
+                            value={formData.packageValue}
+                            onChange={(e) => handleInputChange('packageValue', e.target.value)}
+                            placeholder="e.g. 35000"
+                          />
+                        </div>
+
+                        <div style={styles.fieldGroup}>
+                          <label style={styles.fieldLabel}>
+                            Delivery Fee (KES) <span style={styles.requiredAsterisk}>*</span>
+                          </label>
+                          <input
+                            type="number"
+                            style={{
+                              ...styles.fieldInput,
+                              borderColor: formErrors.deliveryFee ? '#ef4444' : '#334155',
+                              backgroundColor: formErrors.deliveryFee ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                            }}
+                            value={formData.deliveryFee}
+                            onChange={(e) => handleInputChange('deliveryFee', e.target.value)}
+                            placeholder="250"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Row 6: Rider Handling Notes */}
+                      <div style={styles.fieldGroup}>
+                        <label style={styles.fieldLabel}>
+                          Special Courier Instructions <span style={styles.optionalTag}>(Optional)</span>
+                        </label>
+                        <textarea
+                          style={styles.fieldTextarea}
+                          rows={2}
+                          value={formData.riderNotes}
+                          onChange={(e) => handleInputChange('riderNotes', e.target.value)}
+                          placeholder="e.g. Fragile electronics. Call customer when at gate 2."
+                        />
+                      </div>
+
+                      {/* Submit CTA */}
+                      <div style={styles.formActionsBar}>
+                        <button
+                          type="submit"
+                          style={styles.submitDeliveryBtn}
+                          disabled={isSubmittingDelivery}
+                        >
+                          {isSubmittingDelivery ? 'Creating Delivery...' : '🚀 Submit & Generate QR Slip'}
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Summary Live Preview */}
+                    <div style={styles.summaryCard}>
+                      <div style={styles.summaryCardHeader}>
+                        <div>
+                          <span style={styles.summarySubTag}>REAL-TIME PREVIEW</span>
+                          <h3 style={styles.summaryHeading}>Delivery Summary</h3>
+                        </div>
+                        <span style={styles.summaryLiveTag}>● Live</span>
+                      </div>
+
+                      <div style={styles.summaryBody}>
+                        <div style={styles.summaryItem}>
+                          <span style={styles.summaryLabel}>Customer</span>
+                          <strong style={styles.summaryValue}>
+                            {formData.customerName.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                          </strong>
+                        </div>
+
+                        <div style={styles.summaryItem}>
+                          <span style={styles.summaryLabel}>Phone</span>
+                          <strong style={styles.summaryValue}>
+                            {formData.customerPhone.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                          </strong>
+                        </div>
+
+                        <div style={styles.summaryItem}>
+                          <span style={styles.summaryLabel}>Zone</span>
+                          <strong style={styles.summaryValue}>
+                            {formData.zone ? `📍 ${formData.zone}` : <em style={styles.emptyPlaceholder}>Not selected</em>}
+                          </strong>
+                        </div>
+
+                        <div style={styles.summaryItem}>
+                          <span style={styles.summaryLabel}>Address</span>
+                          <span style={styles.summaryValueMultiline}>
+                            {formData.address.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                          </span>
+                        </div>
+
+                        <div style={styles.summaryItem}>
+                          <span style={styles.summaryLabel}>Item / Description</span>
+                          <strong style={styles.summaryValue}>
+                            {formData.itemDescription.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                          </strong>
+                        </div>
+
+                        <div style={styles.summaryDivider} />
+
+                        <div style={styles.summaryRowInline}>
+                          <div>
+                            <span style={styles.summaryLabel}>Priority</span>
+                            <div style={{ marginTop: '2px' }}>
+                              <span style={styles.summaryPriorityBadge}>{formData.priority}</span>
+                            </div>
+                          </div>
+                          <div>
+                            <span style={styles.summaryLabel}>Fee &amp; ETA</span>
+                            <strong style={styles.summaryFeeHighlight}>KES {formData.deliveryFee || '250'}</strong>
+                            <span style={{ fontSize: '10.5px', color: '#38bdf8' }}>
+                              {getEstimatedDeliveryTime(formData.zone, formData.priority)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {formData.riderNotes && (
+                          <div style={styles.summaryNotesBlock}>
+                            <span style={styles.summaryLabel}>Handling Notes:</span>
+                            <p style={styles.summaryNotesText}>"{formData.riderNotes}"</p>
+                          </div>
+                        )}
+
+                        <div style={styles.autoRouteFeatureBox}>
+                          <span style={{ fontSize: '13px', color: '#22c55e' }}>✓</span>
+                          <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
+                            Automatic zone pricing &amp; immediate <strong>📦 OPEN</strong> database entry upon submission.
+                          </span>
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
 
-                    {formData.riderNotes && (
-                      <div style={styles.summaryNotesBlock}>
-                        <span style={styles.summaryLabel}>Handling Notes:</span>
-                        <p style={styles.summaryNotesText}>"{formData.riderNotes}"</p>
+                {/* ─── RETAILER LIVE AUDIT LEDGER ─── */}
+                <div style={styles.retailerLedgerCard}>
+                  <div style={styles.feedHeader}>
+                    <div>
+                      <h2 style={styles.panelTitle}>Enterprise Retailer Delivery Ledger &amp; Waybills ({filteredDeliveries.length})</h2>
+                      <p style={styles.panelDesc}>Complete live audit trail of package dispatches, verification tokens, and status checkpoints.</p>
+                    </div>
+
+                    <div style={styles.filterToolbar}>
+                      <input
+                        style={styles.searchBar}
+                        placeholder="Filter ledger by reference, customer, item, or address..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+
+                      <div style={styles.filterPills}>
+                        {['ALL', 'OPEN', 'ASSIGNED', 'PICKED_UP', 'DELIVERED'].map((filter) => (
+                          <button
+                            key={filter}
+                            onClick={() => setStatusFilter(filter)}
+                            style={{
+                              ...styles.filterPillBtn,
+                              backgroundColor: statusFilter === filter ? '#0284c7' : '#1e293b',
+                              color: statusFilter === filter ? '#ffffff' : '#94a3b8',
+                              borderColor: statusFilter === filter ? '#38bdf8' : '#334155',
+                            }}
+                          >
+                            {filter}
+                          </button>
+                        ))}
                       </div>
-                    )}
+                    </div>
+                  </div>
 
-                    <div style={styles.autoRouteFeatureBox}>
-                      <span style={{ fontSize: '13px', color: '#22c55e' }}>✓</span>
-                      <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
-                        Automatic zone pricing &amp; immediate <strong>📦 OPEN</strong> database entry upon submission.
+                  <div style={styles.tableWrapper}>
+                    <table style={styles.table}>
+                      <thead>
+                        <tr style={styles.trHead}>
+                          <th style={styles.th}>Waybill Ref</th>
+                          <th style={styles.th}>Customer</th>
+                          <th style={styles.th}>Phone</th>
+                          <th style={styles.th}>Package Description</th>
+                          <th style={styles.th}>Destination Node</th>
+                          <th style={styles.th}>Assigned Courier</th>
+                          <th style={styles.th}>QR Token</th>
+                          <th style={styles.th}>Status</th>
+                          <th style={styles.th}>Audit &amp; QR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredDeliveries.length === 0 ? (
+                          <tr>
+                            <td colSpan="9" style={styles.emptyTd}>
+                              No records matching the filter criteria.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredDeliveries.map((item) => (
+                            <tr
+                              key={item.id}
+                              style={styles.trBody}
+                              onClick={() => setInspectedWaybill(item)}
+                            >
+                              <td style={styles.td}>
+                                <code style={styles.refCode}>{item.reference || `#${item.id}`}</code>
+                              </td>
+                              <td style={styles.td}>
+                                <strong>{item.customerName}</strong>
+                              </td>
+                              <td style={styles.td}>{item.customerPhone}</td>
+                              <td style={styles.td}>{item.itemDescription}</td>
+                              <td style={styles.td}>{item.deliveryAddress}</td>
+                              <td style={styles.td}>
+                                {item.riderName ? (
+                                  <span style={styles.riderPill}>🚴 {item.riderName}</span>
+                                ) : (
+                                  <em style={{ color: '#64748b' }}>Pending Assignment</em>
+                                )}
+                              </td>
+                              <td style={styles.td}>
+                                {item.qrToken ? (
+                                  <span style={styles.tokenCode} title={item.qrToken}>
+                                    {item.qrToken.slice(0, 18)}...
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#64748b' }}>—</span>
+                                )}
+                              </td>
+                              <td style={styles.td}>
+                                <span style={{ ...styles.badge, ...styles[`badge_${item.status}`] }}>
+                                  {item.status}
+                                </span>
+                              </td>
+                              <td style={styles.td}>
+                                <button
+                                  style={styles.viewRowBtn}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInspectedWaybill(item);
+                                  }}
+                                >
+                                  📱 Show QR ↗
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── SUB-TAB 2: MY HIRED FLEET COURIERS ── */}
+            {retailerSubTab === 'riders' && (
+              <div style={styles.retailerSection}>
+                {/* Top Toolbar */}
+                <div style={styles.hubToolbar}>
+                  <div style={styles.hubTitleGroup}>
+                    <div style={styles.hubIconBadge}>👥</div>
+                    <div>
+                      <h2 style={styles.hubTitle}>🏪 My Hired Couriers &amp; Store Fleet</h2>
+                      <span style={styles.hubSubtitle}>
+                        Hire and manage dedicated delivery riders for your store, generate personalized PWA onboarding links, and track fulfillment status
                       </span>
                     </div>
                   </div>
+
+                  <div style={styles.hubActions}>
+                    <button
+                      style={styles.openNewDeliveryBtn}
+                      onClick={() => {
+                        setRiderFormData({
+                          name: '',
+                          phone: '',
+                          email: '',
+                          hub: 'Kamau Electronics (Westlands Hub)'
+                        });
+                        setRiderFormErrors({});
+                        setIsRegisterRiderModalOpen(true);
+                      }}
+                    >
+                      <span style={{ fontSize: '15px' }}>➕</span> Hire New Rider for My Store
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* ─── RETAILER LIVE AUDIT LEDGER ─── */}
-            <div style={styles.retailerLedgerCard}>
-              <div style={styles.feedHeader}>
-                <div>
-                  <h2 style={styles.panelTitle}>Enterprise Retailer Delivery Ledger &amp; Waybills ({filteredDeliveries.length})</h2>
-                  <p style={styles.panelDesc}>Complete live audit trail of package dispatches, verification tokens, and status checkpoints.</p>
+                {/* Riders Fleet Summary Cards */}
+                <div style={styles.kpiContainer}>
+                  <div style={{ ...styles.kpiCard, flex: 1 }}>
+                    <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>🏍️</div>
+                    <div>
+                      <span style={{ ...styles.kpiValue, color: '#38bdf8' }}>{riders.length}</span>
+                      <span style={styles.kpiLabel}>Total Hired Couriers</span>
+                    </div>
+                  </div>
+
+                  <div style={{ ...styles.kpiCard, flex: 1, borderColor: '#22c55e' }}>
+                    <div style={{ ...styles.kpiIcon, color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.12)' }}>✓</div>
+                    <div>
+                      <span style={{ ...styles.kpiValue, color: '#22c55e' }}>
+                        {riders.filter((r) => r.pwaStatus === 'READY' || r.status === 'ACTIVE').length}
+                      </span>
+                      <span style={styles.kpiLabel}>PWA Ready &amp; Active</span>
+                    </div>
+                  </div>
+
+                  <div style={{ ...styles.kpiCard, flex: 1, borderColor: '#f59e0b' }}>
+                    <div style={{ ...styles.kpiIcon, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>📩</div>
+                    <div>
+                      <span style={{ ...styles.kpiValue, color: '#f59e0b' }}>
+                        {riders.filter((r) => r.pwaStatus === 'LINK_SENT' || r.pwaStatus === 'PENDING').length}
+                      </span>
+                      <span style={styles.kpiLabel}>Pending Onboarding Invites</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div style={styles.filterToolbar}>
-                  <input
-                    style={styles.searchBar}
-                    placeholder="Filter ledger by reference, customer, item, or address..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+                {/* Filter & Search Bar */}
+                <div style={styles.tableCard}>
+                  <div style={styles.tableHeaderBar}>
+                    <div>
+                      <h3 style={styles.tableTitle}>Authorized Store Fleet Roster</h3>
+                      <span style={styles.tableSubtitle}>
+                        Each hired rider receives a permanent personalized token link to access your store deliveries in the REFLEX Rider PWA
+                      </span>
+                    </div>
 
-                  <div style={styles.filterPills}>
-                    {['ALL', 'OPEN', 'ASSIGNED', 'PICKED_UP', 'DELIVERED'].map((filter) => (
-                      <button
-                        key={filter}
-                        onClick={() => setStatusFilter(filter)}
-                        style={{
-                          ...styles.filterPillBtn,
-                          backgroundColor: statusFilter === filter ? '#0284c7' : '#1e293b',
-                          color: statusFilter === filter ? '#ffffff' : '#94a3b8',
-                          borderColor: statusFilter === filter ? '#38bdf8' : '#334155',
-                        }}
-                      >
-                        {filter}
-                      </button>
-                    ))}
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        placeholder="🔍 Search courier name, phone, code..."
+                        value={riderSearchTerm}
+                        onChange={(e) => setRiderSearchTerm(e.target.value)}
+                        style={styles.tableSearchInput}
+                      />
+
+                      <div style={styles.filterPills}>
+                        <button
+                          style={{
+                            ...styles.filterPill,
+                            ...(riderStatusFilter === 'ALL' ? styles.filterPillActive : {})
+                          }}
+                          onClick={() => setRiderStatusFilter('ALL')}
+                        >
+                          All ({riders.length})
+                        </button>
+                        <button
+                          style={{
+                            ...styles.filterPill,
+                            ...(riderStatusFilter === 'READY' ? styles.filterPillActive : {})
+                          }}
+                          onClick={() => setRiderStatusFilter('READY')}
+                        >
+                          PWA Ready
+                        </button>
+                        <button
+                          style={{
+                            ...styles.filterPill,
+                            ...(riderStatusFilter === 'LINK_SENT' ? styles.filterPillActive : {})
+                          }}
+                          onClick={() => setRiderStatusFilter('LINK_SENT')}
+                        >
+                          Invite Sent
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Courier Table */}
+                  <div style={styles.tableResponsiveWrapper}>
+                    <table style={styles.table}>
+                      <thead>
+                        <tr style={styles.trHead}>
+                          <th style={styles.th}>COURIER</th>
+                          <th style={styles.th}>PHONE NUMBER</th>
+                          <th style={styles.th}>EMAIL</th>
+                          <th style={styles.th}>ASSIGNED HUB / STORE</th>
+                          <th style={styles.th}>STATUS</th>
+                          <th style={styles.th}>PWA READINESS</th>
+                          <th style={styles.th}>ONBOARDING ACTIONS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {riders
+                          .filter((r) => {
+                            if (riderStatusFilter === 'READY' && r.pwaStatus !== 'READY' && r.status !== 'ACTIVE') return false;
+                            if (riderStatusFilter === 'LINK_SENT' && r.pwaStatus !== 'LINK_SENT') return false;
+                            if (riderSearchTerm.trim()) {
+                              const q = riderSearchTerm.toLowerCase();
+                              return (
+                                (r.name || '').toLowerCase().includes(q) ||
+                                (r.phone || '').toLowerCase().includes(q) ||
+                                (r.code || '').toLowerCase().includes(q) ||
+                                (r.email || '').toLowerCase().includes(q) ||
+                                (r.hub || '').toLowerCase().includes(q)
+                              );
+                            }
+                            return true;
+                          })
+                          .map((rider) => {
+                            const onboardingLink = rider.onboardingUrl || `${window.location.origin}/join/${rider.onboardingToken || 'token_' + rider.id}`;
+                            const isRegenerating = regeneratingRiderId === rider.id;
+
+                            return (
+                              <tr key={rider.id || rider.code} style={styles.trBody}>
+                                <td style={styles.td}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div style={styles.riderTableAvatar}>
+                                      {(rider.name || 'R').slice(0, 1)}
+                                    </div>
+                                    <div>
+                                      <strong style={{ color: '#ffffff', fontSize: '13.5px', display: 'block' }}>
+                                        {rider.name}
+                                      </strong>
+                                      <code style={styles.refCode}>{rider.code || `#${rider.id}`}</code>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td style={styles.td}>
+                                  <strong style={{ color: '#38bdf8', fontSize: '13px' }}>{rider.phone}</strong>
+                                </td>
+                                <td style={styles.td}>
+                                  <span style={{ color: '#94a3b8', fontSize: '12.5px' }}>{rider.email || '—'}</span>
+                                </td>
+                                <td style={styles.td}>
+                                  <span style={{ color: '#cbd5e1', fontSize: '12.5px' }}>📍 {rider.hub || 'Kamau Electronics (Westlands)'}</span>
+                                </td>
+                                <td style={styles.td}>
+                                  <span
+                                    style={{
+                                      ...styles.badge,
+                                      ...styles.badge_ASSIGNED
+                                    }}
+                                  >
+                                    {rider.status || 'ACTIVE'}
+                                  </span>
+                                </td>
+                                <td style={styles.td}>
+                                  {rider.pwaStatus === 'READY' || rider.status === 'ACTIVE' ? (
+                                    <span style={styles.pwaReadyBadge}>✓ READY / ACTIVE</span>
+                                  ) : (
+                                    <span style={styles.pwaPendingBadge}>📩 INVITE SENT</span>
+                                  )}
+                                </td>
+                                <td style={styles.td}>
+                                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <button
+                                      style={styles.actionBtnSecondary}
+                                      onClick={() => handleCopyPwaLink(onboardingLink)}
+                                      title="Copy personal PWA access link"
+                                    >
+                                      📋 Copy Link
+                                    </button>
+                                    <button
+                                      style={styles.actionBtnShare}
+                                      onClick={() => handleSharePwaLink(onboardingLink, rider)}
+                                      title="Share via WhatsApp or SMS"
+                                    >
+                                      📱 Share
+                                    </button>
+                                    <button
+                                      style={styles.actionBtnGhost}
+                                      onClick={() => handleRegenerateRiderLink(rider.id)}
+                                      disabled={isRegenerating}
+                                      title="Invalidate old token and issue fresh link"
+                                    >
+                                      {isRegenerating ? '⏳' : '🔄'}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
-
-              <div style={styles.tableWrapper}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr style={styles.trHead}>
-                      <th style={styles.th}>Waybill Ref</th>
-                      <th style={styles.th}>Customer</th>
-                      <th style={styles.th}>Phone</th>
-                      <th style={styles.th}>Package Description</th>
-                      <th style={styles.th}>Destination Node</th>
-                      <th style={styles.th}>Assigned Courier</th>
-                      <th style={styles.th}>QR Token</th>
-                      <th style={styles.th}>Status</th>
-                      <th style={styles.th}>Audit &amp; QR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredDeliveries.length === 0 ? (
-                      <tr>
-                        <td colSpan="9" style={styles.emptyTd}>
-                          No records matching the filter criteria.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredDeliveries.map((item) => (
-                        <tr
-                          key={item.id}
-                          style={styles.trBody}
-                          onClick={() => setInspectedWaybill(item)}
-                        >
-                          <td style={styles.td}>
-                            <code style={styles.refCode}>{item.reference || `#${item.id}`}</code>
-                          </td>
-                          <td style={styles.td}>
-                            <strong>{item.customerName}</strong>
-                          </td>
-                          <td style={styles.td}>{item.customerPhone}</td>
-                          <td style={styles.td}>{item.itemDescription}</td>
-                          <td style={styles.td}>{item.deliveryAddress}</td>
-                          <td style={styles.td}>
-                            {item.riderName ? (
-                              <span style={styles.riderPill}>🚴 {item.riderName}</span>
-                            ) : (
-                              <em style={{ color: '#64748b' }}>Pending Assignment</em>
-                            )}
-                          </td>
-                          <td style={styles.td}>
-                            {item.qrToken ? (
-                              <span style={styles.tokenCode} title={item.qrToken}>
-                                {item.qrToken.slice(0, 18)}...
-                              </span>
-                            ) : (
-                              <span style={{ color: '#64748b' }}>—</span>
-                            )}
-                          </td>
-                          <td style={styles.td}>
-                            <span style={{ ...styles.badge, ...styles[`badge_${item.status}`] }}>
-                              {item.status}
-                            </span>
-                          </td>
-                          <td style={styles.td}>
-                            <button
-                              style={styles.viewRowBtn}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setInspectedWaybill(item);
-                              }}
-                            >
-                              📱 Show QR ↗
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -3367,7 +3574,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 9. Register New Rider Modal */}
+      {/* 9. Register / Hire New Rider Modal */}
       {isRegisterRiderModalOpen && (
         <div style={styles.modalOverlay} onClick={() => setIsRegisterRiderModalOpen(false)}>
           <div style={{ ...styles.modalCard, maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
@@ -3377,14 +3584,36 @@ export default function App() {
                   🏍️
                 </div>
                 <div>
-                  <h3 style={styles.modalTitle}>Register New Rider</h3>
-                  <span style={styles.modalSubTag}>ONBOARDING &amp; UNIQUE PWA ACCESS TOKEN</span>
+                  <h3 style={styles.modalTitle}>Hire / Register New Rider</h3>
+                  <span style={styles.modalSubTag}>HIRE DEDICATED STORE COURIER &amp; ISSUE PWA LINK</span>
                 </div>
               </div>
               <button onClick={() => setIsRegisterRiderModalOpen(false)} style={styles.modalCloseBtn}>✕</button>
             </div>
 
             <form onSubmit={handleRegisterRiderSubmit} style={styles.modalBody}>
+              {/* Store context notice banner */}
+              <div style={{
+                backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '10px'
+              }}>
+                <span style={{ fontSize: '20px' }}>🏪</span>
+                <div>
+                  <strong style={{ fontSize: '13px', color: '#ffffff', display: 'block' }}>
+                    Hiring Store: Kamau Electronics (Westlands)
+                  </strong>
+                  <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                    This courier will be added to your store roster and can fulfill customer deliveries via their dedicated Rider PWA.
+                  </span>
+                </div>
+              </div>
+
               <div style={styles.fieldGroup}>
                 <label style={styles.fieldLabel}>
                   Full Name <span style={styles.requiredAsterisk}>*</span>
@@ -3405,43 +3634,45 @@ export default function App() {
                 )}
               </div>
 
-              <div style={styles.fieldGroup}>
-                <label style={styles.fieldLabel}>
-                  Phone Number <span style={styles.requiredAsterisk}>*</span>
-                </label>
-                <input
-                  style={{
-                    ...styles.fieldInput,
-                    borderColor: riderFormErrors.phone ? '#ef4444' : '#334155',
-                    backgroundColor: riderFormErrors.phone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
-                  }}
-                  value={riderFormData.phone}
-                  onChange={(e) => setRiderFormData({ ...riderFormData, phone: e.target.value })}
-                  placeholder="e.g. +254701234567 or 0701234567"
-                  disabled={isSubmittingRider}
-                />
-                {riderFormErrors.phone && (
-                  <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.phone}</span>
-                )}
-              </div>
+              <div style={styles.formRow2}>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>
+                    Phone Number <span style={styles.requiredAsterisk}>*</span>
+                  </label>
+                  <input
+                    style={{
+                      ...styles.fieldInput,
+                      borderColor: riderFormErrors.phone ? '#ef4444' : '#334155',
+                      backgroundColor: riderFormErrors.phone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                    }}
+                    value={riderFormData.phone}
+                    onChange={(e) => setRiderFormData({ ...riderFormData, phone: e.target.value })}
+                    placeholder="e.g. +254701234567 or 0701234567"
+                    disabled={isSubmittingRider}
+                  />
+                  {riderFormErrors.phone && (
+                    <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.phone}</span>
+                  )}
+                </div>
 
-              <div style={styles.fieldGroup}>
-                <label style={styles.fieldLabel}>Email Address (Optional)</label>
-                <input
-                  type="email"
-                  style={{
-                    ...styles.fieldInput,
-                    borderColor: riderFormErrors.email ? '#ef4444' : '#334155',
-                    backgroundColor: riderFormErrors.email ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
-                  }}
-                  value={riderFormData.email}
-                  onChange={(e) => setRiderFormData({ ...riderFormData, email: e.target.value })}
-                  placeholder="e.g. kevin@rider.co.ke"
-                  disabled={isSubmittingRider}
-                />
-                {riderFormErrors.email && (
-                  <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.email}</span>
-                )}
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Email (Optional)</label>
+                  <input
+                    type="email"
+                    style={{
+                      ...styles.fieldInput,
+                      borderColor: riderFormErrors.email ? '#ef4444' : '#334155',
+                      backgroundColor: riderFormErrors.email ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                    }}
+                    value={riderFormData.email}
+                    onChange={(e) => setRiderFormData({ ...riderFormData, email: e.target.value })}
+                    placeholder="e.g. kevin@rider.co.ke"
+                    disabled={isSubmittingRider}
+                  />
+                  {riderFormErrors.email && (
+                    <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.email}</span>
+                  )}
+                </div>
               </div>
 
               <div style={styles.fieldGroup}>
@@ -3452,6 +3683,7 @@ export default function App() {
                   onChange={(e) => setRiderFormData({ ...riderFormData, hub: e.target.value })}
                   disabled={isSubmittingRider}
                 >
+                  <option value="Kamau Electronics (Westlands Hub)">Kamau Electronics (Westlands Hub)</option>
                   <option value="Westlands Hub">Westlands Hub (HQ)</option>
                   <option value="CBD Depot">Nairobi CBD Depot</option>
                   <option value="Kilimani Node">Kilimani Node</option>
@@ -3476,7 +3708,7 @@ export default function App() {
                   disabled={isSubmittingRider}
                   style={styles.btnPrimary}
                 >
-                  {isSubmittingRider ? 'Registering Rider...' : '🚀 Register Rider & Generate Link'}
+                  {isSubmittingRider ? 'Hiring Rider...' : '🚀 Hire Rider & Generate Link'}
                 </button>
               </div>
             </form>
@@ -4944,5 +5176,39 @@ const styles = {
     gap: '12px',
     cursor: 'pointer',
     transition: 'all 0.15s ease'
+  },
+  segmentedControlMini: {
+    display: 'flex',
+    backgroundColor: '#090d16',
+    borderRadius: '10px',
+    padding: '3px',
+    border: '1px solid #1e293b',
+    gap: '3px'
+  },
+  segmentButtonMini: {
+    padding: '6px 14px',
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderRadius: '8px',
+    color: '#94a3b8',
+    fontSize: '12.5px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease'
+  },
+  segmentActiveMini: {
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)'
+  },
+  refCodeSmall: {
+    fontSize: '11px',
+    fontFamily: 'monospace',
+    color: '#38bdf8',
+    backgroundColor: '#1e293b',
+    padding: '2px 6px',
+    borderRadius: '6px',
+    display: 'inline-block',
+    marginTop: '2px'
   },
 };
