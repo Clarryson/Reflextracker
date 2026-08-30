@@ -210,7 +210,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [getAuthToken]);
+  }, [getAuthToken, completedDeliveryIds]);
 
   const fetchRiders = useCallback(async () => {
     try {
