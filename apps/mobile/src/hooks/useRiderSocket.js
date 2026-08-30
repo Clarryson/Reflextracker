@@ -54,6 +54,34 @@ export function useRiderSocket({ riderId, onAssignmentReceived, onOrderCancelled
     socket.on('connect', () => {
       setIsConnected(true);
       socket.emit('rider:join', { riderId });
+      
+      // Catch-up: Fetch authoritative state from backend after reconnection
+      // This ensures we don't miss any deliveries reassigned during downtime
+      const performCatchUp = async () => {
+        try {
+          const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+          const { getAssignedDeliveries } = await import('../services/api.js');
+          
+          // Fetch fresh delivery list from backend
+          const freshDeliveries = await getAssignedDeliveries(riderId);
+          
+          // Notify parent component to reconcile state
+          if (onStatusChanged) {
+            onStatusChanged({ 
+              type: 'catch_up', 
+              deliveries: freshDeliveries,
+              timestamp: new Date().toISOString()
+            });
+          }
+          
+          console.log('Socket reconnect: Caught up with backend state, received', freshDeliveries?.length, 'deliveries');
+        } catch (error) {
+          console.warn('Catch-up fetch failed after reconnect:', error.message);
+        }
+      };
+      
+      // Delay catch-up slightly to let server process the rider:join event
+      setTimeout(performCatchUp, 500);
     });
 
     socket.on('disconnect', () => {

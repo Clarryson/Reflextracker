@@ -6,6 +6,64 @@
 const DB_NAME = 'reflex_rider_db';
 const DB_VERSION = 1;
 
+/**
+ * Check if IndexedDB is available in this browser/environment.
+ * Returns false in private browsing, unsupported browsers, or disabled by user.
+ */
+export function supportsIndexedDB() {
+  try {
+    // Check if IndexedDB is available
+    const indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB;
+    if (!indexedDB) return false;
+
+    // Try to open a test database to verify it's truly available
+    const test = indexedDB.open('__test_db_' + Date.now());
+    let isSupported = true;
+    
+    test.onerror = () => {
+      isSupported = false;
+    };
+    
+    test.onsuccess = () => {
+      indexedDB.deleteDatabase('__test_db_' + Date.now());
+    };
+
+    return isSupported;
+  } catch (error) {
+    // Errors in private mode, quota exceeded, or security restrictions
+    console.warn('IndexedDB support check failed:', error.message);
+    return false;
+  }
+}
+
+/**
+ * In-memory fallback queue for when IndexedDB is unavailable.
+ */
+const inMemoryQueue = {
+  mutations: [],
+  
+  add(mutation) {
+    this.mutations.push(mutation);
+    // Keep queue size bounded (max 50 items to prevent memory bloat)
+    if (this.mutations.length > 50) {
+      this.mutations.shift();
+    }
+    return this.mutations.length;
+  },
+  
+  getAll() {
+    return [...this.mutations];
+  },
+  
+  remove(index) {
+    this.mutations.splice(index, 1);
+  },
+  
+  count() {
+    return this.mutations.length;
+  },
+};
+
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -30,67 +88,126 @@ function openDB() {
 
 /**
  * Queue a mutation into the outbox for background sync.
+ * Falls back to in-memory queue if IndexedDB is unavailable.
  */
 export async function queueMutation({ url, method = 'POST', headers = {}, body = null }) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('outbox', 'readwrite');
-    const store = tx.objectStore('outbox');
-    const mutation = {
-      url,
-      method,
-      headers,
-      body,
-      createdAt: new Date().toISOString(),
-      attempts: 0,
-      idempotencyKey: 'mut_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9),
-    };
-    const req = store.add(mutation);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  const mutation = {
+    url,
+    method,
+    headers,
+    body,
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+    idempotencyKey: 'mut_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9),
+  };
+
+  if (!supportsIndexedDB()) {
+    console.warn('IndexedDB unavailable - using in-memory queue');
+    inMemoryQueue.add(mutation);
+    return { success: true, offline: 'memory' };
+  }
+
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('outbox', 'readwrite');
+      const store = tx.objectStore('outbox');
+      const req = store.add(mutation);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => {
+        console.warn('Failed to queue mutation in IndexedDB, using memory fallback');
+        inMemoryQueue.add(mutation);
+        reject(req.error);
+      };
+    });
+  } catch (error) {
+    console.warn('IndexedDB queue failed, using in-memory fallback:', error.message);
+    inMemoryQueue.add(mutation);
+    return { success: true, offline: 'memory' };
+  }
 }
 
 /**
  * Get all pending mutations in FIFO order.
  */
 export async function getPendingMutations() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('outbox', 'readonly');
-    const store = tx.objectStore('outbox');
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
+  if (!supportsIndexedDB()) {
+    return inMemoryQueue.getAll();
+  }
+
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('outbox', 'readonly');
+      const store = tx.objectStore('outbox');
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => {
+        console.warn('Failed to get mutations from IndexedDB, using memory');
+        resolve(inMemoryQueue.getAll());
+      };
+    });
+  } catch (error) {
+    console.warn('Error reading from IndexedDB:', error.message);
+    return inMemoryQueue.getAll();
+  }
 }
 
 /**
  * Remove a mutation by ID after successful sync.
  */
 export async function removeMutation(id) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('outbox', 'readwrite');
-    const store = tx.objectStore('outbox');
-    const req = store.delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  if (!supportsIndexedDB()) {
+    const idx = inMemoryQueue.mutations.findIndex(m => m.id === id);
+    if (idx >= 0) inMemoryQueue.remove(idx);
+    return;
+  }
+
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('outbox', 'readwrite');
+      const store = tx.objectStore('outbox');
+      const req = store.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = () => {
+        console.warn('Failed to remove mutation from IndexedDB');
+        const idx = inMemoryQueue.mutations.findIndex(m => m.id === id);
+        if (idx >= 0) inMemoryQueue.remove(idx);
+        reject(req.error);
+      };
+    });
+  } catch (error) {
+    console.warn('Error removing from IndexedDB:', error.message);
+    const idx = inMemoryQueue.mutations.findIndex(m => m.id === id);
+    if (idx >= 0) inMemoryQueue.remove(idx);
+  }
 }
 
 /**
  * Count how many mutations are waiting to sync.
  */
 export async function countPendingMutations() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('outbox', 'readonly');
-    const store = tx.objectStore('outbox');
-    const req = store.count();
-    req.onsuccess = () => resolve(req.result || 0);
-    req.onerror = () => reject(req.error);
-  });
+  if (!supportsIndexedDB()) {
+    return inMemoryQueue.count();
+  }
+
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('outbox', 'readonly');
+      const store = tx.objectStore('outbox');
+      const req = store.count();
+      req.onsuccess = () => resolve(req.result || 0);
+      req.onerror = () => {
+        console.warn('Failed to count mutations, using memory');
+        resolve(inMemoryQueue.count());
+      };
+    });
+  } catch (error) {
+    console.warn('Error counting from IndexedDB:', error.message);
+    return inMemoryQueue.count();
+  }
 }
 
 /**

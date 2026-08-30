@@ -3,6 +3,7 @@ import RiderHomeScreen from './screens/RiderHomeScreen';
 import ActiveDeliveryScreen from './screens/ActiveDeliveryScreen';
 import OfflineBanner from './components/OfflineBanner';
 import DeliverySummaryModal from './components/DeliverySummaryModal';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { useRiderSocket } from './hooks/useRiderSocket';
 import { getAssignedDeliveries, confirmPickup } from './services/api';
@@ -61,6 +62,13 @@ export default function App() {
   }, [selectedDelivery]);
 
   const handleStatusChanged = useCallback((payload) => {
+    // Handle catch-up events after reconnection
+    if (payload.type === 'catch_up' && Array.isArray(payload.deliveries)) {
+      setDeliveries(payload.deliveries);
+      return;
+    }
+    
+    // Handle regular status change events
     setDeliveries((prev) =>
       prev.map((d) => (String(d.id) === String(payload.deliveryId) ? { ...d, status: payload.status } : d))
     );
@@ -90,52 +98,54 @@ export default function App() {
   };
 
   return (
-    <div style={styles.appRoot}>
-      {/* Toast Banner */}
-      {toastMessage && (
-        <div style={styles.toast}>
-          {toastMessage}
-        </div>
-      )}
+    <ErrorBoundary>
+      <div style={styles.appRoot}>
+        {/* Toast Banner */}
+        {toastMessage && (
+          <div style={styles.toast}>
+            {toastMessage}
+          </div>
+        )}
 
-      {/* Network and Offline Outbox Banner */}
-      <OfflineBanner
-        isOnline={isOnline}
-        pendingCount={pendingCount}
-        isSyncing={isSyncing}
-        onSyncClick={triggerSync}
-      />
-
-      {/* Screen Routing */}
-      {!selectedDelivery ? (
-        <RiderHomeScreen
-          riderId={riderId}
-          onRiderIdChange={setRiderId}
-          deliveries={deliveries}
-          onSelectDelivery={(delivery) => setSelectedDelivery(delivery)}
-          isConnected={isConnected}
-          onRefresh={loadDeliveries}
-          isLoading={isLoading}
-          onConfirmPickup={handleConfirmPickup}
-        />
-      ) : (
-        <ActiveDeliveryScreen
-          delivery={selectedDelivery}
-          riderId={riderId}
-          socket={socket}
+        {/* Network and Offline Outbox Banner */}
+        <OfflineBanner
           isOnline={isOnline}
-          onBack={() => setSelectedDelivery(null)}
-          onDeliveryCompleted={handleDeliveryCompleted}
+          pendingCount={pendingCount}
+          isSyncing={isSyncing}
+          onSyncClick={triggerSync}
         />
-      )}
 
-      {/* Post-Completion Summary Celebration Modal */}
-      <DeliverySummaryModal
-        isOpen={Boolean(summaryDelivery)}
-        delivery={summaryDelivery}
-        onClose={() => setSummaryDelivery(null)}
-      />
-    </div>
+        {/* Screen Routing */}
+        {!selectedDelivery ? (
+          <RiderHomeScreen
+            riderId={riderId}
+            onRiderIdChange={setRiderId}
+            deliveries={deliveries}
+            onSelectDelivery={(delivery) => setSelectedDelivery(delivery)}
+            isConnected={isConnected}
+            onRefresh={loadDeliveries}
+            isLoading={isLoading}
+            onConfirmPickup={handleConfirmPickup}
+          />
+        ) : (
+          <ActiveDeliveryScreen
+            delivery={selectedDelivery}
+            riderId={riderId}
+            socket={socket}
+            isOnline={isOnline}
+            onBack={() => setSelectedDelivery(null)}
+            onDeliveryCompleted={handleDeliveryCompleted}
+          />
+        )}
+
+        {/* Post-Completion Summary Celebration Modal */}
+        <DeliverySummaryModal
+          isOpen={Boolean(summaryDelivery)}
+          delivery={summaryDelivery}
+          onClose={() => setSummaryDelivery(null)}
+        />
+      </div>
+    </ErrorBoundary>
   );
 }
 

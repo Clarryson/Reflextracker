@@ -47,29 +47,60 @@ export default function ActiveDeliveryScreen({
   // 2. Geolocation Watcher during Transit
   useEffect(() => {
     if (status === 'PICKED_UP' && 'geolocation' in navigator) {
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        (pos) => {
-          const coords = {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          };
-          setCurrentCoords(coords);
+      // Request location permission explicitly
+      const startLocationTracking = () => {
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          (pos) => {
+            const coords = {
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            };
+            setCurrentCoords(coords);
 
-          const payload = {
-            deliveryId: delivery.id,
-            riderId,
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            timestamp: new Date().toISOString(),
-          };
+            const payload = {
+              deliveryId: delivery.id,
+              riderId,
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              timestamp: new Date().toISOString(),
+            };
 
-          if (socket && socket.connected) {
-            socket.emit('rider:location_update', payload);
+            if (socket && socket.connected) {
+              socket.emit('rider:location_update', payload);
+            }
+          },
+          (err) => {
+            // Handle specific geolocation errors
+            if (err.code === err.PERMISSION_DENIED) {
+              console.warn('Location permission denied by user');
+            } else if (err.code === err.POSITION_UNAVAILABLE) {
+              console.warn('Location unavailable - GPS signal weak');
+            } else if (err.code === err.TIMEOUT) {
+              console.warn('Location timeout - taking too long to get GPS');
+            } else {
+              console.warn('GPS Watcher warning:', err.message);
+            }
+          },
+          { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+        );
+      };
+
+      // Check if we have permission to access geolocation
+      if ('permissions' in navigator) {
+        navigator.permissions.query({ name: 'geolocation' }).then((permission) => {
+          if (permission.state !== 'denied') {
+            startLocationTracking();
+          } else {
+            console.warn('Geolocation permission permanently denied');
           }
-        },
-        (err) => console.warn('GPS Watcher warning:', err.message),
-        { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
-      );
+        }).catch(() => {
+          // Permissions API not supported, try anyway
+          startLocationTracking();
+        });
+      } else {
+        // Permissions API not available, just try
+        startLocationTracking();
+      }
     }
 
     return () => {

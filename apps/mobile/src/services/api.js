@@ -153,81 +153,145 @@ export async function verifyAndCompleteDelivery(deliveryId, verificationCode, pr
   const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
   // 1. Verify QR token / Code
-  const verifyRes = await fetch(`${API_BASE}/deliveries/${deliveryId}/verify`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeader,
-    },
-    body: JSON.stringify({ qrToken: verificationCode }),
-  });
+  let verifyRes;
+  try {
+    verifyRes = await fetch(`${API_BASE}/deliveries/${deliveryId}/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader,
+      },
+      body: JSON.stringify({ qrToken: verificationCode }),
+    });
+  } catch (networkErr) {
+    throw new Error(`Network error during verification: ${networkErr.message}`);
+  }
 
   // Handle verification response
   if (!verifyRes.ok) {
+    let errorMessage = 'Verification failed';
+    
+    try {
+      const errData = await verifyRes.json();
+      errorMessage = errData.message || errorMessage;
+    } catch {
+      // Response is not JSON, use status code message
+    }
+
     if (verifyRes.status === 400) {
       // Invalid code - user entered wrong code
-      const errData = await verifyRes.json().catch(() => ({}));
-      throw new Error(errData.message || 'Invalid verification code. Please try again.');
+      throw new Error(errorMessage || 'Invalid verification code. Please try again.');
     } else if (verifyRes.status === 409) {
       // Conflict - delivery already completed or reassigned
-      const errData = await verifyRes.json().catch(() => ({}));
-      throw new Error(errData.message || 'Delivery status has changed. Please refresh and try again.');
+      throw new Error(errorMessage || 'Delivery status has changed. Please refresh and try again.');
     } else if (verifyRes.status >= 500) {
       // Server error - temporary unavailability
       throw new Error('Verification service temporarily unavailable. Please try again in a few moments.');
     } else {
       // Other errors
-      const errData = await verifyRes.json().catch(() => ({}));
-      throw new Error(errData.message || `Verification failed with error ${verifyRes.status}`);
+      throw new Error(errorMessage || `Verification failed with error ${verifyRes.status}`);
     }
+  }
+
+  // Validate verification response
+  let verifyData;
+  try {
+    verifyData = await verifyRes.json();
+    if (!verifyData.success) {
+      throw new Error(verifyData.message || 'Verification failed');
+    }
+  } catch (parseErr) {
+    throw new Error(`Invalid server response during verification: ${parseErr.message}`);
   }
 
   // 2. Upload Proof of Delivery (multipart/form-data)
   let proofBlob;
-  if (typeof proofImageDataUrlOrBlob === 'string') {
-    const byteString = atob(proofImageDataUrlOrBlob.split(',')[1] || proofImageDataUrlOrBlob);
-    const mimeString = proofImageDataUrlOrBlob.split(',')[0].split(':')[1]?.split(';')[0] || 'image/jpeg';
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) {
-      ia[i] = byteString.charCodeAt(i);
+  try {
+    if (typeof proofImageDataUrlOrBlob === 'string') {
+      const byteString = atob(proofImageDataUrlOrBlob.split(',')[1] || proofImageDataUrlOrBlob);
+      const mimeString = proofImageDataUrlOrBlob.split(',')[0].split(':')[1]?.split(';')[0] || 'image/jpeg';
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      proofBlob = new Blob([ab], { type: mimeString });
+    } else if (proofImageDataUrlOrBlob?.blob) {
+      proofBlob = proofImageDataUrlOrBlob.blob;
+    } else {
+      proofBlob = proofImageDataUrlOrBlob;
     }
-    proofBlob = new Blob([ab], { type: mimeString });
-  } else if (proofImageDataUrlOrBlob?.blob) {
-    proofBlob = proofImageDataUrlOrBlob.blob;
-  } else {
-    proofBlob = proofImageDataUrlOrBlob;
+  } catch (imageErr) {
+    console.warn('Image conversion failed, continuing without proof:', imageErr.message);
+    proofBlob = null;
   }
 
-  const formData = new FormData();
-  formData.append('proof', proofBlob, `pod-${deliveryId}.jpg`);
+  if (proofBlob) {
+    const formData = new FormData();
+    formData.append('proof', proofBlob, `pod-${deliveryId}.jpg`);
 
-  const proofRes = await fetch(`${API_BASE}/deliveries/${deliveryId}/proof`, {
-    method: 'POST',
-    headers: {
-      ...authHeader,
-    },
-    body: formData,
-  });
+    try {
+      const proofRes = await fetch(`${API_BASE}/deliveries/${deliveryId}/proof`, {
+        method: 'POST',
+        headers: {
+          ...authHeader,
+        },
+        body: formData,
+      });
 
-  if (!proofRes.ok) {
-    const errJson = await proofRes.json().catch(() => ({}));
-    console.warn('Proof upload notice:', errJson.message);
+      if (!proofRes.ok) {
+        try {
+          const errJson = await proofRes.json();
+          console.warn('Proof upload warning:', errJson.message || 'Proof upload failed');
+        } catch {
+          console.warn('Proof upload failed with status:', proofRes.status);
+        }
+        // Don't fail delivery completion if proof upload fails
+      }
+    } catch (proofErr) {
+      console.warn('Proof upload network error:', proofErr.message);
+      // Don't fail delivery completion if proof upload fails
+    }
   }
 
   // 3. Complete delivery
-  const completeRes = await fetch(`${API_BASE}/deliveries/${deliveryId}/complete`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeader,
-    },
-    body: JSON.stringify({ notes: 'Delivered and verified via Reflex Mobile' }),
-  });
+  let completeRes;
+  try {
+    completeRes = await fetch(`${API_BASE}/deliveries/${deliveryId}/complete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader,
+      },
+      body: JSON.stringify({ notes: 'Delivered and verified via Reflex Mobile' }),
+    });
+  } catch (networkErr) {
+    throw new Error(`Network error during completion: ${networkErr.message}`);
+  }
 
   if (!completeRes.ok) {
-    const errJson = await completeRes.json().catch(() => ({}));
-    throw new Error(errJson.message || 'Delivery completion failed.');
+    let errorMessage = 'Delivery completion failed';
+    try {
+      const errJson = await completeRes.json();
+      errorMessage = errJson.message || errorMessage;
+    } catch {
+      // Response is not JSON
+    }
+    throw new Error(errorMessage);
+  }
+
+  // Validate completion response
+  try {
+    const completeData = await completeRes.json();
+    if (!completeData.success && completeData.success !== undefined) {
+      throw new Error(completeData.message || 'Delivery completion failed');
+    }
+  } catch (parseErr) {
+    if (parseErr.message.includes('Delivery completion failed')) {
+      throw parseErr;
+    }
+    // Some servers may not return JSON on success
+    console.warn('Completion response parse warning:', parseErr.message);
   }
 
   // Optimistic local update
