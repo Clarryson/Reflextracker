@@ -6,6 +6,47 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://backend-productio
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://backend-production-7f0d0.up.railway.app';
 const LOCAL_HOST_IP = '192.168.2.101'; // Local Wi-Fi IP for seamless phone camera scanning
 
+// Nairobi Delivery Zones & Estimation Logic
+export const NAIROBI_ZONES = [
+  'Westlands',
+  'CBD',
+  'Kilimani',
+  'Lavington',
+  'Karen',
+  'Parklands',
+  'Eastleigh',
+  'Embakasi'
+];
+
+export const PRIORITY_LEVELS = ['Normal', 'High', 'Urgent'];
+
+export const ZONE_BASE_FEES = {
+  Westlands: 250,
+  CBD: 200,
+  Kilimani: 250,
+  Parklands: 250,
+  Lavington: 300,
+  Eastleigh: 300,
+  Karen: 450,
+  Embakasi: 400
+};
+
+export const ESTIMATED_TIMES = {
+  Westlands: { Normal: '45–60 mins', High: '30–45 mins', Urgent: '20–30 mins' },
+  CBD: { Normal: '30–45 mins', High: '25–35 mins', Urgent: '15–25 mins' },
+  Kilimani: { Normal: '40–55 mins', High: '30–40 mins', Urgent: '20–30 mins' },
+  Parklands: { Normal: '40–55 mins', High: '30–40 mins', Urgent: '20–30 mins' },
+  Lavington: { Normal: '45–60 mins', High: '35–45 mins', Urgent: '25–35 mins' },
+  Eastleigh: { Normal: '50–70 mins', High: '40–55 mins', Urgent: '30–40 mins' },
+  Karen: { Normal: '60–90 mins', High: '45–65 mins', Urgent: '35–50 mins' },
+  Embakasi: { Normal: '60–85 mins', High: '50–65 mins', Urgent: '35–50 mins' }
+};
+
+export const getEstimatedDeliveryTime = (zone, priority) => {
+  const zoneTimes = ESTIMATED_TIMES[zone] || ESTIMATED_TIMES.Westlands;
+  return zoneTimes[priority] || zoneTimes.Normal || '45–60 mins';
+};
+
 export default function App() {
   // ─── 0. Check URL for Mobile Phone QR Scan Redirection ───
   const urlParams = new URLSearchParams(window.location.search);
@@ -13,24 +54,68 @@ export default function App() {
   const verifyIdParam = urlParams.get('id') || urlParams.get('deliveryId');
   const verifyTokenParam = urlParams.get('token');
 
+  // ─── 0b. Check URL for Rider PWA Onboarding (/join/:token or ?join=token) ───
+  const pathParts = window.location.pathname.split('/');
+  const isJoinPath = pathParts[1] === 'join' && pathParts[2];
+  const joinTokenParam = isJoinPath ? pathParts[2] : (urlParams.get('join') || urlParams.get('onboarding') || urlParams.get('token'));
+
+  const [isOnboardingMode, setIsOnboardingMode] = useState(Boolean(isJoinPath || urlParams.get('join') || urlParams.get('onboarding')));
+  const [onboardingToken, setOnboardingToken] = useState(joinTokenParam || '');
+  const [onboardingStatus, setOnboardingStatus] = useState('loading'); // 'loading', 'valid', 'invalid'
+  const [onboardingRider, setOnboardingRider] = useState(null);
+  const [onboardingErrorMsg, setOnboardingErrorMsg] = useState('');
+
   const [isUrlVerifyMode, setIsUrlVerifyMode] = useState(Boolean(verifyParam && verifyIdParam));
   const [urlVerifyStatus, setUrlVerifyStatus] = useState('idle'); // 'idle', 'verifying', 'success', 'error'
   const [urlVerifyMsg, setUrlVerifyMsg] = useState('');
   const [urlDeliveryData, setUrlDeliveryData] = useState(null);
 
   // Navigation & Role Tabs
-  const [activeTab, setActiveTab] = useState('retailer'); // 'retailer', 'dispatcher', 'rider'
+  const [activeTab, setActiveTab] = useState('retailer'); // 'retailer', 'dispatcher', 'riders', 'rider'
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Live Data State (Railway Backend + MySQL)
+  // Live Data State (Railway Backend + MySQL + Express Proxy)
   const [deliveries, setDeliveries] = useState([]);
   const [riders, setRiders] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
 
-  // Retailer / Order Form State
+  // Fleet Riders Management State
+  const [isRegisterRiderModalOpen, setIsRegisterRiderModalOpen] = useState(false);
+  const [registeredRiderSuccess, setRegisteredRiderSuccess] = useState(null);
+  const [riderFormData, setRiderFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    hub: 'Westlands Hub'
+  });
+  const [riderFormErrors, setRiderFormErrors] = useState({});
+  const [isSubmittingRider, setIsSubmittingRider] = useState(false);
+  const [riderSearchTerm, setRiderSearchTerm] = useState('');
+  const [riderStatusFilter, setRiderStatusFilter] = useState('ALL');
+  const [regeneratingRiderId, setRegeneratingRiderId] = useState(null);
+
+  // Retailer "New Delivery Request" Form State
+  const [formData, setFormData] = useState({
+    customerName: 'John',
+    customerPhone: '0712345678',
+    zone: 'Westlands',
+    priority: 'Normal',
+    address: 'Delta Corner Tower, 4th Floor, Westlands, Nairobi',
+    itemDescription: 'Laptop - HP ProBook 450 G8',
+    reference: 'ORD-20465',
+    packageValue: '35000',
+    deliveryFee: '250',
+    riderNotes: 'Handle with care, fragile electronics. Call upon reaching reception.'
+  });
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
+  const [createdDeliverySlip, setCreatedDeliverySlip] = useState(null);
+  const [isNewDeliveryModalOpen, setIsNewDeliveryModalOpen] = useState(false);
+
+  // Legacy fallback state for compatibility
   const [customerName, setCustomerName] = useState('John');
   const [phone, setPhone] = useState('0712345678');
   const [itemDescription, setItemDescription] = useState('Laptop');
@@ -211,17 +296,74 @@ export default function App() {
   const fetchRiders = useCallback(async () => {
     try {
       const token = await getAuthToken('dispatcher');
-      const res = await fetch(`${API_BASE}/riders`, {
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-      });
-      if (res.ok) {
+      // Fetch from local Express proxy or Railway API
+      let res = await fetch('http://localhost:3000/api/riders').catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetch(`${API_BASE}/riders`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        }).catch(() => null);
+      }
+      if (res && res.ok) {
         const data = await res.json();
-        setRiders(data.data?.riders || []);
+        if (data.data?.riders) {
+          setRiders(data.data.riders);
+        }
       }
     } catch (err) {
-      console.warn('Error fetching riders from Railway:', err.message);
+      console.warn('Error fetching riders:', err.message);
     }
   }, [getAuthToken]);
+
+  // ─── Check & Validate Rider Onboarding Token (/join/:token) ───
+  useEffect(() => {
+    if (!isOnboardingMode || !onboardingToken) return;
+
+    let isMounted = true;
+    (async () => {
+      setOnboardingStatus('loading');
+      try {
+        let res = await fetch(`http://localhost:3000/api/rider/onboarding/${onboardingToken}`).catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetch(`${API_BASE}/rider/onboarding/${onboardingToken}`).catch(() => null);
+        }
+        
+        if (res && res.ok) {
+          const data = await res.json();
+          if (isMounted && data.success && data.data?.rider) {
+            setOnboardingRider(data.data.rider);
+            setOnboardingStatus('valid');
+            return;
+          }
+        }
+
+        // Local fallback seeds if offline
+        if (isMounted) {
+          if (onboardingToken.includes('brian') || onboardingToken === '7f82a91c4e91b00401brian04') {
+            setOnboardingRider({ id: '4', code: 'RIDER-004', name: 'Brian Mutua', phone: '+254712345678', email: 'brian@rider.co.ke', hub: 'Westlands Hub' });
+            setOnboardingStatus('valid');
+          } else if (onboardingToken.includes('grace') || onboardingToken === '8e93b02d5f02c00502grace05') {
+            setOnboardingRider({ id: '5', code: 'RIDER-005', name: 'Grace Wanjiru', phone: '+254722334455', email: 'grace@rider.co.ke', hub: 'Kilimani Node' });
+            setOnboardingStatus('valid');
+          } else if (onboardingToken.includes('james') || onboardingToken === '9f04c13e6a13d00603james06') {
+            setOnboardingRider({ id: '6', code: 'RIDER-006', name: 'James Otieno', phone: '+254733445566', email: 'james@rider.co.ke', hub: 'CBD Depot' });
+            setOnboardingStatus('valid');
+          } else {
+            setOnboardingStatus('invalid');
+            setOnboardingErrorMsg('Invalid or expired rider invitation token.');
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          setOnboardingStatus('invalid');
+          setOnboardingErrorMsg('Network error validating invitation token.');
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOnboardingMode, onboardingToken]);
 
   // ─── Direct URL QR Verification Handler (when phone camera scans barcode) ───
   const executeUrlVerification = useCallback(async (deliveryId, token) => {
@@ -303,7 +445,156 @@ export default function App() {
     };
   }, [fetchDeliveries, fetchRiders]);
 
-  // ─── Dispatcher: Create Delivery Order (Railway REST) ───
+  // ─── Retailer: Form Validation & Field Change Handlers ───
+  const validateField = (field, value) => {
+    let error = '';
+    if (field === 'customerName' && (!value || !value.trim())) {
+      error = 'Customer name is required';
+    }
+    if (field === 'customerPhone') {
+      const p = (value || '').trim();
+      if (!p) {
+        error = 'Phone number is required';
+      } else {
+        const phoneRegex = /^(\+?254|0)?[17]\d{8}$/;
+        const digits = p.replace(/\D/g, '');
+        if (!phoneRegex.test(p) && (digits.length < 9 || digits.length > 12)) {
+          error = 'Enter a valid Kenyan phone number (e.g. +254712345678 or 0712345678)';
+        }
+      }
+    }
+    if (field === 'zone' && (!value || !value.trim())) {
+      error = 'Delivery zone is required';
+    }
+    if (field === 'address' && (!value || !value.trim())) {
+      error = 'Specific delivery address & landmarks are required';
+    }
+    if (field === 'itemDescription' && (!value || !value.trim())) {
+      error = 'Item description is required';
+    }
+    if (field === 'packageValue' && value !== '' && value !== undefined) {
+      if (isNaN(Number(value)) || Number(value) < 0) {
+        error = 'Package value must be a non-negative number';
+      }
+    }
+    if (field === 'deliveryFee' && value !== '' && value !== undefined) {
+      if (isNaN(Number(value)) || Number(value) < 0) {
+        error = 'Delivery fee must be a non-negative number';
+      }
+    }
+    return error;
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'zone' || field === 'priority') {
+        const targetZone = field === 'zone' ? value : prev.zone;
+        const targetPriority = field === 'priority' ? value : prev.priority;
+        const baseFee = ZONE_BASE_FEES[targetZone] || 250;
+        const surcharge = targetPriority === 'Urgent' ? 100 : targetPriority === 'High' ? 50 : 0;
+        updated.deliveryFee = String(baseFee + surcharge);
+      }
+      return updated;
+    });
+
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    ['customerName', 'customerPhone', 'zone', 'address', 'itemDescription', 'packageValue', 'deliveryFee'].forEach(field => {
+      const err = validateField(field, formData[field]);
+      if (err) errors[field] = err;
+    });
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateDeliveryRequest = async (e) => {
+    if (e) e.preventDefault();
+    if (!validateForm()) {
+      showNotification('⚠️ Please complete all required fields with valid details');
+      return;
+    }
+
+    setIsSubmittingDelivery(true);
+    try {
+      const token = await getAuthToken('retailer');
+      const fullAddress = `${formData.address.trim()} (${formData.zone})`;
+      
+      const payload = {
+        customerName: formData.customerName.trim(),
+        customerPhone: formData.customerPhone.trim(),
+        deliveryAddress: fullAddress,
+        itemDescription: formData.itemDescription.trim(),
+        zone: formData.zone,
+        priority: formData.priority,
+        reference: formData.reference.trim() || undefined,
+        packageValue: formData.packageValue ? Number(formData.packageValue) : undefined,
+        deliveryFee: formData.deliveryFee ? Number(formData.deliveryFee) : undefined,
+        riderNotes: formData.riderNotes.trim() || undefined,
+      };
+
+      const res = await fetch(`${API_BASE}/deliveries`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (data.success && data.data?.delivery) {
+        const created = data.data.delivery;
+        const qrSlipData = {
+          ...created,
+          customerName: formData.customerName,
+          customerPhone: formData.customerPhone,
+          deliveryAddress: fullAddress,
+          zone: formData.zone,
+          priority: formData.priority,
+          itemDescription: formData.itemDescription,
+          reference: created.reference || formData.reference || `DEL-${created.id}`,
+          packageValue: formData.packageValue,
+          deliveryFee: formData.deliveryFee,
+          riderNotes: formData.riderNotes,
+          estimatedTime: getEstimatedDeliveryTime(formData.zone, formData.priority),
+          qrToken: created.qrToken || `REFLEX-${created.reference || created.id}-${Date.now().toString(36).toUpperCase()}`
+        };
+
+        setCreatedDeliverySlip(qrSlipData);
+        showNotification(`✅ Delivery created! Waybill #${qrSlipData.reference} is now 📦 OPEN in database`);
+        await fetchDeliveries();
+
+        // Reset form
+        setFormData({
+          customerName: '',
+          customerPhone: '',
+          zone: 'Westlands',
+          priority: 'Normal',
+          address: '',
+          itemDescription: '',
+          reference: '',
+          packageValue: '',
+          deliveryFee: '250',
+          riderNotes: ''
+        });
+        setFormErrors({});
+      } else {
+        showNotification(`⚠️ ${data.message || 'Failed to create delivery on server'}`);
+      }
+    } catch (err) {
+      showNotification(`❌ Network error: ${err.message}`);
+    } finally {
+      setIsSubmittingDelivery(false);
+    }
+  };
+
+  // ─── Dispatcher: Create Delivery Order (Railway REST fallback) ───
   const handleCreateOrder = async (e) => {
     e.preventDefault();
     if (!customerName || !address || !phone || !itemDescription) return;
@@ -343,7 +634,173 @@ export default function App() {
     }
   };
 
-  // ─── Dispatcher: Assign Fleet Rider (Railway REST) ───
+  // ─── Retailer / Dispatcher: Register Rider & PWA Link Management ───
+  const handleRegisterRiderSubmit = async (e) => {
+    if (e) e.preventDefault();
+    const errors = {};
+    if (!riderFormData.name || !riderFormData.name.trim()) {
+      errors.name = 'Full name is required';
+    }
+    if (!riderFormData.phone || !riderFormData.phone.trim()) {
+      errors.phone = 'Phone number is required';
+    } else {
+      const p = riderFormData.phone.trim();
+      const phoneRegex = /^(\+?254|0)?[17]\d{8}$/;
+      const digits = p.replace(/\D/g, '');
+      if (!phoneRegex.test(p) && (digits.length < 9 || digits.length > 12)) {
+        errors.phone = 'Enter a valid Kenyan phone number (e.g. +254712345678 or 0712345678)';
+      }
+    }
+    if (riderFormData.email && riderFormData.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(riderFormData.email.trim())) {
+        errors.email = 'Enter a valid email address';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setRiderFormErrors(errors);
+      return;
+    }
+
+    setIsSubmittingRider(true);
+    try {
+      const token = await getAuthToken('dispatcher');
+      let res = await fetch('http://localhost:3000/api/riders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(riderFormData)
+      }).catch(() => null);
+
+      if (!res || !res.ok) {
+        res = await fetch(`${API_BASE}/riders`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(riderFormData)
+        }).catch(() => null);
+      }
+
+      if (res) {
+        const data = await res.json().catch(() => ({}));
+        if (data.success && data.data?.rider) {
+          const created = data.data.rider;
+          const onboardingUrl = data.data.onboardingUrl || `${window.location.origin}/join/${created.onboardingToken}`;
+          setRegisteredRiderSuccess({ rider: created, onboardingUrl });
+          setIsRegisterRiderModalOpen(false);
+          setRiderFormData({ name: '', phone: '', email: '', hub: 'Westlands Hub' });
+          setRiderFormErrors({});
+          showNotification(`✅ Rider ${created.name} registered! PWA access link generated.`);
+          await fetchRiders();
+          return;
+        } else if (data.message) {
+          showNotification(`⚠️ ${data.message}`);
+          return;
+        }
+      }
+
+      // Local fallback creation if completely offline
+      const nextId = String(riders.length + 4);
+      const fallbackToken = 'token_' + Date.now().toString(36);
+      const localRider = {
+        id: nextId,
+        code: `RIDER-${nextId.padStart(3, '0')}`,
+        name: riderFormData.name.trim(),
+        phone: riderFormData.phone.trim(),
+        email: riderFormData.email.trim() || `${riderFormData.name.toLowerCase().replace(/\s+/g, '.')}@rider.reflex.co.ke`,
+        hub: riderFormData.hub || 'Westlands Hub',
+        status: 'ACTIVE',
+        pwaStatus: 'LINK_SENT',
+        onboardingToken: fallbackToken,
+        onboardingUrl: `${window.location.origin}/join/${fallbackToken}`
+      };
+      setRiders(prev => [...prev, localRider]);
+      setRegisteredRiderSuccess({ rider: localRider, onboardingUrl: localRider.onboardingUrl });
+      setIsRegisterRiderModalOpen(false);
+      setRiderFormData({ name: '', phone: '', email: '', hub: 'Westlands Hub' });
+      setRiderFormErrors({});
+      showNotification(`✅ Rider ${localRider.name} registered locally!`);
+    } catch (err) {
+      showNotification(`❌ Error registering rider: ${err.message}`);
+    } finally {
+      setIsSubmittingRider(false);
+    }
+  };
+
+  const handleRegenerateRiderLink = async (riderId) => {
+    setRegeneratingRiderId(riderId);
+    try {
+      const token = await getAuthToken('dispatcher');
+      let res = await fetch(`http://localhost:3000/api/riders/${riderId}/regenerate-link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.success && data.data?.onboardingUrl) {
+          showNotification(`🔄 New PWA access link generated for Rider #${riderId}!`);
+          await fetchRiders();
+          setRegisteredRiderSuccess({
+            rider: data.data.rider,
+            onboardingUrl: data.data.onboardingUrl
+          });
+          return;
+        }
+      }
+
+      // Fallback
+      const target = riders.find(r => String(r.id) === String(riderId));
+      if (target) {
+        const freshToken = 'fresh_' + Date.now().toString(36);
+        const freshUrl = `${window.location.origin}/join/${freshToken}`;
+        const updated = { ...target, onboardingToken: freshToken, onboardingUrl: freshUrl, pwaStatus: 'LINK_SENT' };
+        setRiders(prev => prev.map(r => String(r.id) === String(riderId) ? updated : r));
+        setRegisteredRiderSuccess({ rider: updated, onboardingUrl: freshUrl });
+        showNotification(`🔄 New PWA link generated for ${target.name}!`);
+      }
+    } catch (err) {
+      showNotification(`❌ Error: ${err.message}`);
+    } finally {
+      setRegeneratingRiderId(null);
+    }
+  };
+
+  const handleCopyPwaLink = (url, riderName) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url);
+      showNotification(`📋 Copied PWA link for ${riderName || 'rider'} to clipboard!`);
+    } else {
+      showNotification(`Link: ${url}`);
+    }
+  };
+
+  const handleSharePwaLink = async (url, rider) => {
+    const text = `Hi ${rider.name}, here is your official REFLEX Rider PWA access link. Open and add it to your Home Screen to start receiving delivery dispatches:\n${url}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'REFLEX Rider PWA Access',
+          text,
+          url
+        });
+        showNotification('✓ Shared via system dialog');
+        return;
+      } catch (e) {}
+    }
+    // WhatsApp Fallback
+    const cleanPhone = (rider.phone || '').replace(/\D/g, '');
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank');
+  };
   const handleAssignRider = async (deliveryId, riderId) => {
     if (!riderId) return;
     try {
@@ -492,6 +949,104 @@ export default function App() {
   };
 
 
+
+  // ─── IF OPENED VIA RIDER PWA INVITATION LINK (/join/:token or ?join=token) ───
+  if (isOnboardingMode) {
+    return (
+      <div style={styles.onboardingPageContainer}>
+        <div style={styles.onboardingCard}>
+          <div style={styles.onboardingHeaderGroup}>
+            <div style={styles.onboardingLogoBadge}>⚡</div>
+            <h1 style={styles.onboardingBrandTitle}>REFLEX Rider PWA</h1>
+            <span style={styles.onboardingSubTag}>OFFICIAL COURIER ONBOARDING GATEWAY</span>
+          </div>
+
+          {onboardingStatus === 'loading' && (
+            <div style={styles.onboardingLoadingBox}>
+              <div style={styles.loadingSpinnerMini} />
+              <p style={{ margin: 0, fontSize: '14px', color: '#cbd5e1', fontWeight: '600' }}>
+                Validating your rider invitation token...
+              </p>
+            </div>
+          )}
+
+          {onboardingStatus === 'valid' && onboardingRider && (
+            <div style={styles.onboardingContent}>
+              <div style={styles.welcomeHeroBox}>
+                <div style={styles.welcomeHeroIcon}>👋</div>
+                <h2 style={styles.welcomeHeroTitle}>Welcome to REFLEX!</h2>
+                <p style={styles.welcomeHeroSubtitle}>
+                  Hi <strong>{onboardingRider.name}</strong>, you have been registered as an authorized REFLEX delivery courier.
+                </p>
+              </div>
+
+              {/* Rider Identity Card */}
+              <div style={styles.onboardingRiderCard}>
+                <div style={styles.onboardingAvatar}>
+                  {onboardingRider.name.slice(0, 1)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <code style={styles.onboardingCodeTag}>{onboardingRider.code || `#${onboardingRider.id}`}</code>
+                    <span style={styles.pwaActiveBadge}>✓ PWA ACTIVE</span>
+                  </div>
+                  <strong style={styles.onboardingNameText}>{onboardingRider.name}</strong>
+                  <span style={styles.onboardingMetaText}>📞 {onboardingRider.phone} • 📍 {onboardingRider.hub || 'Westlands Hub'}</span>
+                </div>
+              </div>
+
+              {/* PWA Home Screen Prompt Banner */}
+              <div style={styles.homeScreenPromptCard}>
+                <span style={{ fontSize: '20px' }}>📲</span>
+                <div>
+                  <strong style={{ fontSize: '13px', color: '#ffffff', display: 'block' }}>
+                    Add REFLEX to your Home Screen
+                  </strong>
+                  <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                    Tap your browser menu and select "Add to Home screen" for instant 1-tap dispatch access.
+                  </span>
+                </div>
+              </div>
+
+              {/* Continue Action */}
+              <button
+                style={styles.onboardingContinueBtn}
+                onClick={() => {
+                  setActiveRiderId(String(onboardingRider.id));
+                  setActiveTab('rider');
+                  setIsOnboardingMode(false);
+                  try {
+                    localStorage.setItem('reflex_active_rider', JSON.stringify(onboardingRider));
+                  } catch (e) {}
+                  showNotification(`👋 Welcome ${onboardingRider.name}! You are ready to receive deliveries.`);
+                }}
+              >
+                🚀 Continue to Delivery Console →
+              </button>
+            </div>
+          )}
+
+          {onboardingStatus === 'invalid' && (
+            <div style={styles.onboardingInvalidBox}>
+              <div style={styles.invalidIconCircle}>❌</div>
+              <h2 style={styles.invalidTitle}>Invalid Invitation Link</h2>
+              <p style={styles.invalidMessage}>
+                {onboardingErrorMsg || 'This rider invitation link is invalid or has expired. Please contact your fleet dispatcher for a fresh invite link.'}
+              </p>
+              <button
+                style={styles.onboardingReturnBtn}
+                onClick={() => {
+                  window.location.href = window.location.origin;
+                }}
+              >
+                ← Return to Home
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ─── IF OPENED VIA PHONE CAMERA QR SCAN REDIRECTION ───
   if (isUrlVerifyMode) {
@@ -667,6 +1222,12 @@ export default function App() {
               onClick={() => setActiveTab('dispatcher')}
             >
               🎛️ Dispatcher
+            </button>
+            <button
+              style={{ ...styles.segmentButton, ...(activeTab === 'riders' ? styles.segmentActive : {}) }}
+              onClick={() => setActiveTab('riders')}
+            >
+              👥 Fleet Riders ({riders.length})
             </button>
             <button
               style={{ ...styles.segmentButton, ...(activeTab === 'rider' ? styles.segmentActive : {}) }}
@@ -924,72 +1485,444 @@ export default function App() {
           </div>
         )}
 
-        {/* ── TAB 2: RETAILER PORTAL & CREATE DELIVERY ── */}
+        {/* ── TAB 2: RETAILER PORTAL & NEW DELIVERY REQUEST ── */}
         {activeTab === 'retailer' && (
-          <div style={styles.gridDashboard}>
-            {/* Left Order Creation Panel */}
-            <div style={styles.leftPanel}>
-              <div style={styles.panelHeader}>
-                <div style={styles.panelIconBadge}>🏪</div>
-                <div>
-                  <h2 style={styles.panelTitle}>Create Delivery</h2>
-                  <p style={styles.panelDesc}>Enter package &amp; recipient details. It instantly saves to Railway database as <strong>📦 OPEN</strong>.</p>
+          <div style={styles.retailerPortalWrapper}>
+            {/* Top Retailer Toolbar */}
+            <div style={styles.retailerToolbar}>
+              <div>
+                <h2 style={styles.retailerHubTitle}>🏪 Retailer Delivery Hub</h2>
+                <p style={styles.retailerHubDesc}>
+                  Create customer delivery dispatches, monitor real-time fulfillment, and generate verification QR slips.
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button
+                  style={styles.openNewDeliveryBtn}
+                  onClick={() => {
+                    const formEl = document.getElementById('new-delivery-request-form');
+                    if (formEl) {
+                      formEl.scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                      setIsNewDeliveryModalOpen(true);
+                    }
+                  }}
+                >
+                  ✨ + New Delivery Request
+                </button>
+              </div>
+            </div>
+
+            {/* ─── NEW DELIVERY REQUEST WORKBENCH ─── */}
+            <div id="new-delivery-request-form" style={styles.newDeliveryContainer}>
+              {/* Header */}
+              <div style={styles.newDeliveryHeader}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={styles.newDeliveryIconBadge}>📦</div>
+                  <div>
+                    <h2 style={styles.newDeliveryTitle}>New Delivery Request</h2>
+                    <div style={styles.zoneRoutingIndicator}>
+                      <span style={styles.zonePulseDot} />
+                      <span style={styles.zoneRoutingText}>
+                        Routing: Smart Auto-Zone ({formData.zone || 'Westlands'})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    style={styles.resetFormBtn}
+                    onClick={() => {
+                      setFormData({
+                        customerName: '',
+                        customerPhone: '',
+                        zone: 'Westlands',
+                        priority: 'Normal',
+                        address: '',
+                        itemDescription: '',
+                        reference: '',
+                        packageValue: '',
+                        deliveryFee: '250',
+                        riderNotes: ''
+                      });
+                      setFormErrors({});
+                      showNotification('Form cleared');
+                    }}
+                    title="Clear entered details"
+                  >
+                    🔄 Clear Form
+                  </button>
                 </div>
               </div>
 
-              <form onSubmit={handleCreateOrder} style={styles.form}>
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Customer Name</label>
-                  <input
-                    style={styles.input}
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="e.g. John / Amina Wanjiru"
-                    required
-                  />
-                </div>
+              {/* Main Content: Left Form & Right Live Delivery Summary */}
+              <div style={styles.newDeliveryLayout}>
+                {/* ─── LEFT: 10 FORM FIELDS ─── */}
+                <form onSubmit={handleCreateDeliveryRequest} style={styles.newDeliveryForm}>
+                  {/* Row 1: Customer Name & Phone */}
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Customer Name <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.customerName ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.customerName ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.customerName}
+                        onChange={(e) => handleInputChange('customerName', e.target.value)}
+                        placeholder="e.g. John / Amina Wanjiru"
+                      />
+                      {formErrors.customerName && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerName}</span>
+                      )}
+                    </div>
 
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Phone Number</label>
-                  <input
-                    style={styles.input}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="e.g. 0712345678"
-                    required
-                  />
-                </div>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Customer Phone Number <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.customerPhone ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.customerPhone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.customerPhone}
+                        onChange={(e) => handleInputChange('customerPhone', e.target.value)}
+                        placeholder="e.g. +254712345678 or 0712345678"
+                      />
+                      {formErrors.customerPhone && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerPhone}</span>
+                      )}
+                    </div>
+                  </div>
 
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Delivery Address</label>
-                  <input
-                    style={styles.input}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="e.g. Westlands, Nairobi"
-                    required
-                  />
-                </div>
+                  {/* Row 2: Delivery Zone & Priority */}
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Delivery Nairobi Zone <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <select
+                        style={{
+                          ...styles.fieldSelect,
+                          borderColor: formErrors.zone ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.zone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.zone}
+                        onChange={(e) => handleInputChange('zone', e.target.value)}
+                      >
+                        {NAIROBI_ZONES.map((z) => (
+                          <option key={z} value={z}>
+                            📍 {z} (Base KES {ZONE_BASE_FEES[z] || 250})
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.zone && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.zone}</span>
+                      )}
+                    </div>
 
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Package Description</label>
-                  <input
-                    style={styles.input}
-                    value={itemDescription}
-                    onChange={(e) => setItemDescription(e.target.value)}
-                    placeholder="e.g. Laptop 15-inch"
-                    required
-                  />
-                </div>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Priority Level</label>
+                      <select
+                        style={styles.fieldSelect}
+                        value={formData.priority}
+                        onChange={(e) => handleInputChange('priority', e.target.value)}
+                      >
+                        {PRIORITY_LEVELS.map((p) => (
+                          <option key={p} value={p}>
+                            {p === 'Urgent' ? '⚡ Urgent (+KES 100)' : p === 'High' ? '🔥 High (+KES 50)' : '📦 Normal Priority'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-                <button type="submit" style={styles.submitBtn} disabled={isSubmitting}>
-                  {isSubmitting ? 'Creating Delivery...' : '📦 Create Delivery'}
-                </button>
-              </form>
+                  {/* Row 3: Specific Address & Landmarks */}
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel}>
+                      Specific Delivery Address &amp; Landmarks <span style={styles.requiredAsterisk}>*</span>
+                    </label>
+                    <textarea
+                      style={{
+                        ...styles.fieldTextarea,
+                        borderColor: formErrors.address ? '#ef4444' : '#334155',
+                        backgroundColor: formErrors.address ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                      }}
+                      value={formData.address}
+                      onChange={(e) => handleInputChange('address', e.target.value)}
+                      placeholder="Building name, floor, apartment, landmark, street name..."
+                      rows={3}
+                    />
+                    {formErrors.address && (
+                      <span style={styles.fieldErrorText}>⚠️ {formErrors.address}</span>
+                    )}
+                  </div>
+
+                  {/* Row 4: Item Description & Internal Reference */}
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Item / Order Description <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.itemDescription ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.itemDescription ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.itemDescription}
+                        onChange={(e) => handleInputChange('itemDescription', e.target.value)}
+                        placeholder="e.g. Laptop - HP ProBook 450"
+                      />
+                      {formErrors.itemDescription && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.itemDescription}</span>
+                      )}
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Internal Reference # (Optional)</label>
+                      <input
+                        style={styles.fieldInput}
+                        value={formData.reference}
+                        onChange={(e) => handleInputChange('reference', e.target.value)}
+                        placeholder="e.g. ORD-20465"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 5: Package Value & Delivery Fee */}
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Package Value (KES)</label>
+                      <div style={styles.currencyInputContainer}>
+                        <span style={styles.currencyPrefixBadge}>KES</span>
+                        <input
+                          type="number"
+                          min="0"
+                          style={{
+                            ...styles.currencyInput,
+                            borderColor: formErrors.packageValue ? '#ef4444' : '#334155'
+                          }}
+                          value={formData.packageValue}
+                          onChange={(e) => handleInputChange('packageValue', e.target.value)}
+                          placeholder="e.g. 35000"
+                        />
+                      </div>
+                      {formErrors.packageValue && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.packageValue}</span>
+                      )}
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Delivery Fee (KES)</label>
+                      <div style={styles.currencyInputContainer}>
+                        <span style={styles.currencyPrefixBadge}>KES</span>
+                        <input
+                          type="number"
+                          min="0"
+                          style={{
+                            ...styles.currencyInput,
+                            borderColor: formErrors.deliveryFee ? '#ef4444' : '#334155'
+                          }}
+                          value={formData.deliveryFee}
+                          onChange={(e) => handleInputChange('deliveryFee', e.target.value)}
+                          placeholder="e.g. 250"
+                        />
+                      </div>
+                      {formErrors.deliveryFee && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.deliveryFee}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 6: Rider Handling Notes */}
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel}>Rider Handling Notes (Optional)</label>
+                    <textarea
+                      style={styles.fieldTextarea}
+                      value={formData.riderNotes}
+                      onChange={(e) => handleInputChange('riderNotes', e.target.value)}
+                      placeholder="Handle with care, fragile electronics. Call upon reaching gate..."
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Bottom Actions */}
+                  <div style={styles.formActionsRow}>
+                    <button
+                      type="button"
+                      style={styles.btnCancel}
+                      onClick={() => {
+                        setFormData({
+                          customerName: '',
+                          customerPhone: '',
+                          zone: 'Westlands',
+                          priority: 'Normal',
+                          address: '',
+                          itemDescription: '',
+                          reference: '',
+                          packageValue: '',
+                          deliveryFee: '250',
+                          riderNotes: ''
+                        });
+                        setFormErrors({});
+                      }}
+                      disabled={isSubmittingDelivery}
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="submit"
+                      style={{
+                        ...styles.btnSubmitGreen,
+                        opacity: isSubmittingDelivery ? 0.7 : 1,
+                        cursor: isSubmittingDelivery ? 'not-allowed' : 'pointer'
+                      }}
+                      disabled={isSubmittingDelivery}
+                    >
+                      {isSubmittingDelivery ? 'Creating Delivery...' : '🚀 Submit & Generate QR Slip'}
+                    </button>
+                  </div>
+                </form>
+
+                {/* ─── RIGHT: LIVE DELIVERY SUMMARY PANEL ─── */}
+                <div style={styles.summaryCard}>
+                  <div style={styles.summaryCardHeader}>
+                    <div>
+                      <span style={styles.summarySubTag}>REAL-TIME PREVIEW</span>
+                      <h3 style={styles.summaryHeading}>Delivery Summary</h3>
+                    </div>
+                    <span style={styles.summaryLiveTag}>● Live</span>
+                  </div>
+
+                  <div style={styles.summaryBody}>
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Customer</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.customerName.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Phone</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.customerPhone.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Zone</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.zone ? `📍 ${formData.zone}` : <em style={styles.emptyPlaceholder}>Not selected</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Address</span>
+                      <span style={styles.summaryValueMultiline}>
+                        {formData.address.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </span>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Item / Description</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.itemDescription.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryDivider} />
+
+                    <div style={styles.summaryRowInline}>
+                      <div>
+                        <span style={styles.summaryLabel}>Priority</span>
+                        <div style={{ marginTop: '2px' }}>
+                          <span
+                            style={{
+                              ...styles.summaryPriorityBadge,
+                              backgroundColor:
+                                formData.priority === 'Urgent'
+                                  ? 'rgba(239, 68, 68, 0.2)'
+                                  : formData.priority === 'High'
+                                  ? 'rgba(245, 158, 11, 0.2)'
+                                  : 'rgba(34, 197, 94, 0.2)',
+                              color:
+                                formData.priority === 'Urgent'
+                                  ? '#f87171'
+                                  : formData.priority === 'High'
+                                  ? '#fbbf24'
+                                  : '#4ade80',
+                              borderColor:
+                                formData.priority === 'Urgent'
+                                  ? '#ef4444'
+                                  : formData.priority === 'High'
+                                  ? '#f59e0b'
+                                  : '#22c55e'
+                            }}
+                          >
+                            {formData.priority === 'Urgent' ? '⚡ Urgent' : formData.priority === 'High' ? '🔥 High' : '📦 Normal'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span style={styles.summaryLabel}>Package Value</span>
+                        <strong style={styles.summaryValueHighlight}>
+                          {formData.packageValue
+                            ? `KES ${Number(formData.packageValue).toLocaleString()}`
+                            : <em style={styles.emptyPlaceholder}>Not provided</em>}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div style={styles.summaryDivider} />
+
+                    <div style={styles.summaryRowInline}>
+                      <div>
+                        <span style={styles.summaryLabel}>Delivery Fee</span>
+                        <strong style={styles.summaryFeeHighlight}>
+                          {formData.deliveryFee
+                            ? `KES ${Number(formData.deliveryFee).toLocaleString()}`
+                            : <em style={styles.emptyPlaceholder}>Not provided</em>}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span style={styles.summaryLabel}>Estimated Time</span>
+                        <div style={styles.summaryEtaBadge}>
+                          ⏱️ {getEstimatedDeliveryTime(formData.zone, formData.priority)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {formData.riderNotes && (
+                      <div style={styles.summaryNotesBlock}>
+                        <span style={styles.summaryLabel}>Handling Notes:</span>
+                        <p style={styles.summaryNotesText}>"{formData.riderNotes}"</p>
+                      </div>
+                    )}
+
+                    <div style={styles.autoRouteFeatureBox}>
+                      <span style={{ fontSize: '13px', color: '#22c55e' }}>✓</span>
+                      <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
+                        Automatic zone pricing &amp; immediate <strong>📦 OPEN</strong> database entry upon submission.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Right Retailer Live Ledger */}
-            <div style={styles.rightPanel}>
+            {/* ─── RETAILER LIVE AUDIT LEDGER ─── */}
+            <div style={styles.retailerLedgerCard}>
               <div style={styles.feedHeader}>
                 <div>
                   <h2 style={styles.panelTitle}>Enterprise Retailer Delivery Ledger &amp; Waybills ({filteredDeliveries.length})</h2>
@@ -1083,16 +2016,244 @@ export default function App() {
                             </span>
                           </td>
                           <td style={styles.td}>
-                            <button style={styles.viewRowBtn} onClick={(e) => {
-                              e.stopPropagation();
-                              setInspectedWaybill(item);
-                            }}>
+                            <button
+                              style={styles.viewRowBtn}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInspectedWaybill(item);
+                              }}
+                            >
                               📱 Show QR ↗
                             </button>
                           </td>
                         </tr>
                       ))
                     )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 2.5: FLEET RIDERS MANAGEMENT ── */}
+        {activeTab === 'riders' && (
+          <div style={styles.retailerSection}>
+            {/* Top Toolbar */}
+            <div style={styles.hubToolbar}>
+              <div style={styles.hubTitleGroup}>
+                <div style={styles.hubIconBadge}>👥</div>
+                <div>
+                  <h2 style={styles.hubTitle}>Fleet Riders &amp; Couriers</h2>
+                  <span style={styles.hubSubtitle}>
+                    Register delivery riders, generate unique PWA onboarding links, and monitor courier status
+                  </span>
+                </div>
+              </div>
+
+              <div style={styles.hubActions}>
+                <button
+                  style={styles.openNewDeliveryBtn}
+                  onClick={() => {
+                    setRiderFormData({ name: '', phone: '', email: '', hub: 'Westlands Hub' });
+                    setRiderFormErrors({});
+                    setIsRegisterRiderModalOpen(true);
+                  }}
+                >
+                  <span style={{ fontSize: '15px' }}>➕</span> Register New Rider
+                </button>
+              </div>
+            </div>
+
+            {/* Riders Fleet Summary Cards */}
+            <div style={styles.kpiContainer}>
+              <div style={{ ...styles.kpiCard, flex: 1 }}>
+                <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>🏍️</div>
+                <div>
+                  <span style={{ ...styles.kpiValue, color: '#38bdf8' }}>{riders.length}</span>
+                  <span style={styles.kpiLabel}>Total Registered Riders</span>
+                </div>
+              </div>
+
+              <div style={{ ...styles.kpiCard, flex: 1, borderColor: '#22c55e' }}>
+                <div style={{ ...styles.kpiIcon, color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.12)' }}>✓</div>
+                <div>
+                  <span style={{ ...styles.kpiValue, color: '#22c55e' }}>
+                    {riders.filter((r) => r.pwaStatus === 'READY' || r.status === 'ACTIVE').length}
+                  </span>
+                  <span style={styles.kpiLabel}>PWA Ready / Active</span>
+                </div>
+              </div>
+
+              <div style={{ ...styles.kpiCard, flex: 1, borderColor: '#f59e0b' }}>
+                <div style={{ ...styles.kpiIcon, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>📩</div>
+                <div>
+                  <span style={{ ...styles.kpiValue, color: '#f59e0b' }}>
+                    {riders.filter((r) => r.pwaStatus === 'LINK_SENT' || r.pwaStatus === 'PENDING').length}
+                  </span>
+                  <span style={styles.kpiLabel}>Pending Onboarding Invites</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div style={styles.tableCard}>
+              <div style={styles.tableHeaderBar}>
+                <div>
+                  <h3 style={styles.tableTitle}>Authorized Fleet Couriers</h3>
+                  <span style={styles.tableSubtitle}>
+                    Each courier has a permanent personalized onboarding token link into the REFLEX Rider PWA
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    placeholder="🔍 Search courier name, phone, code..."
+                    value={riderSearchTerm}
+                    onChange={(e) => setRiderSearchTerm(e.target.value)}
+                    style={styles.tableSearchInput}
+                  />
+
+                  <div style={styles.filterPills}>
+                    <button
+                      style={{
+                        ...styles.filterPill,
+                        ...(riderStatusFilter === 'ALL' ? styles.filterPillActive : {})
+                      }}
+                      onClick={() => setRiderStatusFilter('ALL')}
+                    >
+                      All ({riders.length})
+                    </button>
+                    <button
+                      style={{
+                        ...styles.filterPill,
+                        ...(riderStatusFilter === 'READY' ? styles.filterPillActive : {})
+                      }}
+                      onClick={() => setRiderStatusFilter('READY')}
+                    >
+                      PWA Ready
+                    </button>
+                    <button
+                      style={{
+                        ...styles.filterPill,
+                        ...(riderStatusFilter === 'LINK_SENT' ? styles.filterPillActive : {})
+                      }}
+                      onClick={() => setRiderStatusFilter('LINK_SENT')}
+                    >
+                      Invite Sent
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Courier Table */}
+              <div style={styles.tableResponsiveWrapper}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.trHead}>
+                      <th style={styles.th}>COURIER</th>
+                      <th style={styles.th}>PHONE NUMBER</th>
+                      <th style={styles.th}>EMAIL</th>
+                      <th style={styles.th}>PRIMARY HUB</th>
+                      <th style={styles.th}>STATUS</th>
+                      <th style={styles.th}>PWA READINESS</th>
+                      <th style={styles.th}>ONBOARDING ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {riders
+                      .filter((r) => {
+                        if (riderStatusFilter === 'READY' && r.pwaStatus !== 'READY' && r.status !== 'ACTIVE') return false;
+                        if (riderStatusFilter === 'LINK_SENT' && r.pwaStatus !== 'LINK_SENT') return false;
+                        if (riderSearchTerm.trim()) {
+                          const q = riderSearchTerm.toLowerCase();
+                          return (
+                            (r.name || '').toLowerCase().includes(q) ||
+                            (r.phone || '').toLowerCase().includes(q) ||
+                            (r.code || '').toLowerCase().includes(q) ||
+                            (r.email || '').toLowerCase().includes(q) ||
+                            (r.hub || '').toLowerCase().includes(q)
+                          );
+                        }
+                        return true;
+                      })
+                      .map((rider) => {
+                        const onboardingLink = rider.onboardingUrl || `${window.location.origin}/join/${rider.onboardingToken || 'token_' + rider.id}`;
+                        const isRegenerating = regeneratingRiderId === rider.id;
+
+                        return (
+                          <tr key={rider.id || rider.code} style={styles.trBody}>
+                            <td style={styles.td}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={styles.riderTableAvatar}>
+                                  {(rider.name || 'R').slice(0, 1)}
+                                </div>
+                                <div>
+                                  <strong style={{ color: '#ffffff', fontSize: '13.5px', display: 'block' }}>
+                                    {rider.name}
+                                  </strong>
+                                  <code style={styles.refCode}>{rider.code || `#${rider.id}`}</code>
+                                </div>
+                              </div>
+                            </td>
+                            <td style={styles.td}>
+                              <strong style={{ color: '#38bdf8', fontSize: '13px' }}>{rider.phone}</strong>
+                            </td>
+                            <td style={styles.td}>
+                              <span style={{ color: '#94a3b8', fontSize: '12.5px' }}>{rider.email || '—'}</span>
+                            </td>
+                            <td style={styles.td}>
+                              <span style={{ color: '#cbd5e1', fontSize: '12.5px' }}>📍 {rider.hub || 'Nairobi Central'}</span>
+                            </td>
+                            <td style={styles.td}>
+                              <span
+                                style={{
+                                  ...styles.badge,
+                                  backgroundColor: rider.status === 'ACTIVE' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                  color: rider.status === 'ACTIVE' ? '#4ade80' : '#fbbf24',
+                                  borderColor: rider.status === 'ACTIVE' ? '#22c55e' : '#f59e0b'
+                                }}
+                              >
+                                {rider.status || 'ACTIVE'}
+                              </span>
+                            </td>
+                            <td style={styles.td}>
+                              {rider.pwaStatus === 'READY' || rider.status === 'ACTIVE' ? (
+                                <span style={styles.pwaReadyBadge}>✓ PWA Ready</span>
+                              ) : (
+                                <span style={styles.pwaPendingBadge}>📩 Invite Sent</span>
+                              )}
+                            </td>
+                            <td style={styles.td}>
+                              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <button
+                                  style={styles.actionBtnSecondary}
+                                  title="Copy Rider PWA Access Link"
+                                  onClick={() => handleCopyPwaLink(onboardingLink, rider.name)}
+                                >
+                                  📋 Copy Link
+                                </button>
+                                <button
+                                  style={styles.actionBtnShare}
+                                  title="Share link via WhatsApp / SMS"
+                                  onClick={() => handleSharePwaLink(onboardingLink, rider)}
+                                >
+                                  📱 Share
+                                </button>
+                                <button
+                                  style={styles.actionBtnGhost}
+                                  title="Regenerate unique onboarding link"
+                                  disabled={isRegenerating}
+                                  onClick={() => handleRegenerateRiderLink(rider.id)}
+                                >
+                                  {isRegenerating ? '⏳' : '🔄 Refresh'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -1599,6 +2760,621 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* 7. Generated QR Slip Modal (Shown immediately after Retailer submits) */}
+      {createdDeliverySlip && (
+        <div style={styles.modalOverlay} onClick={() => setCreatedDeliverySlip(null)}>
+          <div style={styles.qrSlipModalCard} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div>
+                <span style={styles.modalSubTag}>OFFICIAL DELIVERY WAYBILL SLIP</span>
+                <h3 style={styles.modalTitle}>📦 Waybill &amp; QR Slip Generated</h3>
+              </div>
+              <button onClick={() => setCreatedDeliverySlip(null)} style={styles.modalCloseBtn}>✕</button>
+            </div>
+
+            <div style={styles.modalBody}>
+              {/* Status Banner */}
+              <div style={styles.qrSlipStatusBanner}>
+                <span style={{ fontSize: '13px', fontWeight: '900', color: '#22c55e' }}>
+                  📦 STATUS: OPEN — RECORDED IN RAILWAY DATABASE
+                </span>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                  Ready for Dispatcher Fleet Rider Assignment
+                </span>
+              </div>
+
+              {/* Scannable QR Code Box */}
+              <div style={styles.qrSlipCodeContainer}>
+                <div style={styles.qrSlipCodeWhiteBox}>
+                  <QRCodeSVG
+                    value={getVerificationUrl(createdDeliverySlip)}
+                    size={160}
+                    level="H"
+                    includeMargin={false}
+                  />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <code style={{ fontSize: '13px', fontWeight: '900', color: '#38bdf8' }}>
+                    {createdDeliverySlip.reference || `DEL-#${createdDeliverySlip.id}`}
+                  </code>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '2px' }}>
+                    Scan QR token to verify handoff at delivery checkpoint
+                  </span>
+                </div>
+              </div>
+
+              {/* Waybill Breakdown Grid */}
+              <div style={styles.modalGrid}>
+                <div style={styles.modalBlock}>
+                  <span style={styles.modalLabel}>Customer Recipient</span>
+                  <strong style={styles.modalVal}>{createdDeliverySlip.customerName}</strong>
+                  <span style={styles.modalSubVal}>📞 {createdDeliverySlip.customerPhone}</span>
+                </div>
+
+                <div style={styles.modalBlock}>
+                  <span style={styles.modalLabel}>Delivery Zone &amp; Priority</span>
+                  <strong style={styles.modalVal}>📍 {createdDeliverySlip.zone || 'Westlands'}</strong>
+                  <span style={styles.modalSubVal}>Priority: {createdDeliverySlip.priority || 'Normal'}</span>
+                </div>
+              </div>
+
+              <div style={styles.modalBlock}>
+                <span style={styles.modalLabel}>Item Description</span>
+                <p style={styles.modalValText}>{createdDeliverySlip.itemDescription}</p>
+              </div>
+
+              <div style={styles.modalBlock}>
+                <span style={styles.modalLabel}>Destination Address</span>
+                <p style={styles.modalValText}>{createdDeliverySlip.deliveryAddress}</p>
+              </div>
+
+              <div style={styles.modalGrid}>
+                <div style={styles.modalBlock}>
+                  <span style={styles.modalLabel}>Package Value</span>
+                  <strong style={{ fontSize: '13px', color: '#fde047' }}>
+                    {createdDeliverySlip.packageValue ? `KES ${Number(createdDeliverySlip.packageValue).toLocaleString()}` : 'Not declared'}
+                  </strong>
+                </div>
+
+                <div style={styles.modalBlock}>
+                  <span style={styles.modalLabel}>Delivery Fee &amp; ETA</span>
+                  <strong style={{ fontSize: '13px', color: '#34d399' }}>
+                    KES {createdDeliverySlip.deliveryFee || '250'}
+                  </strong>
+                  <span style={{ fontSize: '11px', color: '#38bdf8' }}>
+                    ETA: {createdDeliverySlip.estimatedTime || '45–60 mins'}
+                  </span>
+                </div>
+              </div>
+
+              {createdDeliverySlip.riderNotes && (
+                <div style={styles.modalBlock}>
+                  <span style={styles.modalLabel}>Rider Handling Notes</span>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: '#cbd5e1', fontStyle: 'italic' }}>
+                    "{createdDeliverySlip.riderNotes}"
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div style={styles.qrSlipModalActions}>
+              <button
+                type="button"
+                style={styles.printSlipBtn}
+                onClick={() => window.print()}
+              >
+                🖨️ Print Delivery Slip
+              </button>
+
+              <button
+                type="button"
+                style={styles.doneSlipBtn}
+                onClick={() => {
+                  setCreatedDeliverySlip(null);
+                  const ledgerEl = document.querySelector('table');
+                  if (ledgerEl) ledgerEl.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                ✓ Done &amp; View in Ledger
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Full Modal Version of New Delivery Request (if opened via button) */}
+      {isNewDeliveryModalOpen && (
+        <div style={styles.modalOverlay} onClick={() => setIsNewDeliveryModalOpen(false)}>
+          <div style={{ ...styles.modalCard, maxWidth: '840px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={styles.newDeliveryIconBadge}>📦</div>
+                <div>
+                  <h3 style={styles.modalTitle}>New Delivery Request</h3>
+                  <div style={styles.zoneRoutingIndicator}>
+                    <span style={styles.zonePulseDot} />
+                    <span style={styles.zoneRoutingText}>
+                      Routing: Smart Auto-Zone ({formData.zone || 'Westlands'})
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setIsNewDeliveryModalOpen(false)} style={styles.modalCloseBtn}>✕</button>
+            </div>
+
+            <div style={{ ...styles.modalBody, maxHeight: '80vh', overflowY: 'auto' }}>
+              <div style={styles.newDeliveryLayout}>
+                {/* Form */}
+                <form
+                  onSubmit={async (e) => {
+                    await handleCreateDeliveryRequest(e);
+                    setIsNewDeliveryModalOpen(false);
+                  }}
+                  style={styles.newDeliveryForm}
+                >
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Customer Name <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.customerName ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.customerName ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.customerName}
+                        onChange={(e) => handleInputChange('customerName', e.target.value)}
+                        placeholder="e.g. John / Amina Wanjiru"
+                      />
+                      {formErrors.customerName && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerName}</span>
+                      )}
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Customer Phone Number <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.customerPhone ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.customerPhone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.customerPhone}
+                        onChange={(e) => handleInputChange('customerPhone', e.target.value)}
+                        placeholder="e.g. +254712345678 or 0712345678"
+                      />
+                      {formErrors.customerPhone && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerPhone}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Delivery Nairobi Zone <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <select
+                        style={{
+                          ...styles.fieldSelect,
+                          borderColor: formErrors.zone ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.zone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.zone}
+                        onChange={(e) => handleInputChange('zone', e.target.value)}
+                      >
+                        {NAIROBI_ZONES.map((z) => (
+                          <option key={z} value={z}>
+                            📍 {z} (Base KES {ZONE_BASE_FEES[z] || 250})
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.zone && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.zone}</span>
+                      )}
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Priority Level</label>
+                      <select
+                        style={styles.fieldSelect}
+                        value={formData.priority}
+                        onChange={(e) => handleInputChange('priority', e.target.value)}
+                      >
+                        {PRIORITY_LEVELS.map((p) => (
+                          <option key={p} value={p}>
+                            {p === 'Urgent' ? '⚡ Urgent (+KES 100)' : p === 'High' ? '🔥 High (+KES 50)' : '📦 Normal Priority'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel}>
+                      Specific Delivery Address &amp; Landmarks <span style={styles.requiredAsterisk}>*</span>
+                    </label>
+                    <textarea
+                      style={{
+                        ...styles.fieldTextarea,
+                        borderColor: formErrors.address ? '#ef4444' : '#334155',
+                        backgroundColor: formErrors.address ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                      }}
+                      value={formData.address}
+                      onChange={(e) => handleInputChange('address', e.target.value)}
+                      placeholder="Building name, floor, apartment, landmark, street name..."
+                      rows={2}
+                    />
+                    {formErrors.address && (
+                      <span style={styles.fieldErrorText}>⚠️ {formErrors.address}</span>
+                    )}
+                  </div>
+
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>
+                        Item / Order Description <span style={styles.requiredAsterisk}>*</span>
+                      </label>
+                      <input
+                        style={{
+                          ...styles.fieldInput,
+                          borderColor: formErrors.itemDescription ? '#ef4444' : '#334155',
+                          backgroundColor: formErrors.itemDescription ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                        }}
+                        value={formData.itemDescription}
+                        onChange={(e) => handleInputChange('itemDescription', e.target.value)}
+                        placeholder="e.g. Laptop - HP ProBook 450"
+                      />
+                      {formErrors.itemDescription && (
+                        <span style={styles.fieldErrorText}>⚠️ {formErrors.itemDescription}</span>
+                      )}
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Internal Reference # (Optional)</label>
+                      <input
+                        style={styles.fieldInput}
+                        value={formData.reference}
+                        onChange={(e) => handleInputChange('reference', e.target.value)}
+                        placeholder="e.g. ORD-20465"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={styles.formRow2}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Package Value (KES)</label>
+                      <div style={styles.currencyInputContainer}>
+                        <span style={styles.currencyPrefixBadge}>KES</span>
+                        <input
+                          type="number"
+                          min="0"
+                          style={styles.currencyInput}
+                          value={formData.packageValue}
+                          onChange={(e) => handleInputChange('packageValue', e.target.value)}
+                          placeholder="e.g. 35000"
+                        />
+                      </div>
+                    </div>
+
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Delivery Fee (KES)</label>
+                      <div style={styles.currencyInputContainer}>
+                        <span style={styles.currencyPrefixBadge}>KES</span>
+                        <input
+                          type="number"
+                          min="0"
+                          style={styles.currencyInput}
+                          value={formData.deliveryFee}
+                          onChange={(e) => handleInputChange('deliveryFee', e.target.value)}
+                          placeholder="e.g. 250"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel}>Rider Handling Notes</label>
+                    <textarea
+                      style={styles.fieldTextarea}
+                      value={formData.riderNotes}
+                      onChange={(e) => handleInputChange('riderNotes', e.target.value)}
+                      placeholder="Handle with care, fragile electronics..."
+                      rows={2}
+                    />
+                  </div>
+
+                  <div style={styles.formActionsRow}>
+                    <button
+                      type="button"
+                      style={styles.btnCancel}
+                      onClick={() => setIsNewDeliveryModalOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      style={styles.btnSubmitGreen}
+                      disabled={isSubmittingDelivery}
+                    >
+                      {isSubmittingDelivery ? 'Creating Delivery...' : '🚀 Submit & Generate QR Slip'}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Summary */}
+                <div style={styles.summaryCard}>
+                  <div style={styles.summaryCardHeader}>
+                    <div>
+                      <span style={styles.summarySubTag}>REAL-TIME PREVIEW</span>
+                      <h3 style={styles.summaryHeading}>Delivery Summary</h3>
+                    </div>
+                    <span style={styles.summaryLiveTag}>● Live</span>
+                  </div>
+
+                  <div style={styles.summaryBody}>
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Customer</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.customerName.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Phone</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.customerPhone.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Zone</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.zone ? `📍 ${formData.zone}` : <em style={styles.emptyPlaceholder}>Not selected</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Address</span>
+                      <span style={styles.summaryValueMultiline}>
+                        {formData.address.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </span>
+                    </div>
+
+                    <div style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>Item / Description</span>
+                      <strong style={styles.summaryValue}>
+                        {formData.itemDescription.trim() || <em style={styles.emptyPlaceholder}>Not provided</em>}
+                      </strong>
+                    </div>
+
+                    <div style={styles.summaryDivider} />
+
+                    <div style={styles.summaryRowInline}>
+                      <div>
+                        <span style={styles.summaryLabel}>Priority</span>
+                        <div style={{ marginTop: '2px' }}>
+                          <span style={styles.summaryPriorityBadge}>{formData.priority}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span style={styles.summaryLabel}>Fee &amp; ETA</span>
+                        <strong style={styles.summaryFeeHighlight}>KES {formData.deliveryFee || '250'}</strong>
+                        <span style={{ fontSize: '10.5px', color: '#38bdf8' }}>
+                          {getEstimatedDeliveryTime(formData.zone, formData.priority)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 9. Register New Rider Modal */}
+      {isRegisterRiderModalOpen && (
+        <div style={styles.modalOverlay} onClick={() => setIsRegisterRiderModalOpen(false)}>
+          <div style={{ ...styles.modalCard, maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ ...styles.newDeliveryIconBadge, backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
+                  🏍️
+                </div>
+                <div>
+                  <h3 style={styles.modalTitle}>Register New Rider</h3>
+                  <span style={styles.modalSubTag}>ONBOARDING &amp; UNIQUE PWA ACCESS TOKEN</span>
+                </div>
+              </div>
+              <button onClick={() => setIsRegisterRiderModalOpen(false)} style={styles.modalCloseBtn}>✕</button>
+            </div>
+
+            <form onSubmit={handleRegisterRiderSubmit} style={styles.modalBody}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>
+                  Full Name <span style={styles.requiredAsterisk}>*</span>
+                </label>
+                <input
+                  style={{
+                    ...styles.fieldInput,
+                    borderColor: riderFormErrors.name ? '#ef4444' : '#334155',
+                    backgroundColor: riderFormErrors.name ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                  }}
+                  value={riderFormData.name}
+                  onChange={(e) => setRiderFormData({ ...riderFormData, name: e.target.value })}
+                  placeholder="e.g. Kevin Mwangi / Brian Otieno"
+                  disabled={isSubmittingRider}
+                />
+                {riderFormErrors.name && (
+                  <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.name}</span>
+                )}
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>
+                  Phone Number <span style={styles.requiredAsterisk}>*</span>
+                </label>
+                <input
+                  style={{
+                    ...styles.fieldInput,
+                    borderColor: riderFormErrors.phone ? '#ef4444' : '#334155',
+                    backgroundColor: riderFormErrors.phone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                  }}
+                  value={riderFormData.phone}
+                  onChange={(e) => setRiderFormData({ ...riderFormData, phone: e.target.value })}
+                  placeholder="e.g. +254701234567 or 0701234567"
+                  disabled={isSubmittingRider}
+                />
+                {riderFormErrors.phone && (
+                  <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.phone}</span>
+                )}
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Email Address (Optional)</label>
+                <input
+                  type="email"
+                  style={{
+                    ...styles.fieldInput,
+                    borderColor: riderFormErrors.email ? '#ef4444' : '#334155',
+                    backgroundColor: riderFormErrors.email ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                  }}
+                  value={riderFormData.email}
+                  onChange={(e) => setRiderFormData({ ...riderFormData, email: e.target.value })}
+                  placeholder="e.g. kevin@rider.co.ke"
+                  disabled={isSubmittingRider}
+                />
+                {riderFormErrors.email && (
+                  <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.email}</span>
+                )}
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Assigned Hub / Node</label>
+                <select
+                  style={styles.fieldSelect}
+                  value={riderFormData.hub}
+                  onChange={(e) => setRiderFormData({ ...riderFormData, hub: e.target.value })}
+                  disabled={isSubmittingRider}
+                >
+                  <option value="Westlands Hub">Westlands Hub (HQ)</option>
+                  <option value="CBD Depot">Nairobi CBD Depot</option>
+                  <option value="Kilimani Node">Kilimani Node</option>
+                  <option value="Lavington Node">Lavington Node</option>
+                  <option value="Eastleigh Depot">Eastleigh Depot</option>
+                  <option value="Karen Hub">Karen Hub</option>
+                  <option value="Industrial Area">Industrial Area Node</option>
+                </select>
+              </div>
+
+              <div style={styles.formActionsRow}>
+                <button
+                  type="button"
+                  onClick={() => setIsRegisterRiderModalOpen(false)}
+                  style={styles.btnSecondary}
+                  disabled={isSubmittingRider}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingRider}
+                  style={styles.btnPrimary}
+                >
+                  {isSubmittingRider ? 'Registering Rider...' : '🚀 Register Rider & Generate Link'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 10. Rider Registration Success & PWA Link Modal */}
+      {registeredRiderSuccess && (
+        <div style={styles.modalOverlay} onClick={() => setRegisteredRiderSuccess(null)}>
+          <div style={{ ...styles.modalCard, maxWidth: '580px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div>
+                <span style={styles.modalSubTag}>ONBOARDING READY</span>
+                <h3 style={styles.modalTitle}>Rider Registered Successfully ✅</h3>
+              </div>
+              <button onClick={() => setRegisteredRiderSuccess(null)} style={styles.modalCloseBtn}>✕</button>
+            </div>
+
+            <div style={styles.modalBody}>
+              {/* Rider Banner Card */}
+              <div style={styles.onboardingSuccessRiderBanner}>
+                <div style={styles.riderTableAvatar}>
+                  {(registeredRiderSuccess.rider.name || 'R').slice(0, 1)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <code style={styles.refCode}>
+                      {registeredRiderSuccess.rider.code || `#${registeredRiderSuccess.rider.id}`}
+                    </code>
+                    <span style={styles.pwaReadyBadge}>READY FOR PWA</span>
+                  </div>
+                  <strong style={{ fontSize: '15px', color: '#ffffff', display: 'block', marginTop: '2px' }}>
+                    {registeredRiderSuccess.rider.name}
+                  </strong>
+                  <span style={{ fontSize: '12px', color: '#38bdf8' }}>
+                    📞 {registeredRiderSuccess.rider.phone} • 📍 {registeredRiderSuccess.rider.hub || 'Westlands'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Unique PWA Link Box */}
+              <div style={styles.pwaLinkBoxContainer}>
+                <span style={styles.modalLabel}>🔗 PERSONALIZED RIDER PWA ACCESS LINK</span>
+                <div style={styles.pwaLinkInputGroup}>
+                  <input
+                    readOnly
+                    value={registeredRiderSuccess.onboardingUrl}
+                    style={styles.pwaLinkInput}
+                    onClick={(e) => e.target.select()}
+                  />
+                  <button
+                    type="button"
+                    style={styles.copyLinkInsideBtn}
+                    onClick={() => handleCopyPwaLink(registeredRiderSuccess.onboardingUrl, registeredRiderSuccess.rider.name)}
+                  >
+                    📋 Copy
+                  </button>
+                </div>
+                <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>
+                  Send this link to the rider. When opened, it securely pairs their device to the permanent REFLEX Rider PWA.
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={styles.onboardingSuccessActionsRow}>
+                <button
+                  type="button"
+                  style={styles.shareWaBtn}
+                  onClick={() => handleSharePwaLink(registeredRiderSuccess.onboardingUrl, registeredRiderSuccess.rider)}
+                >
+                  📱 Share via WhatsApp / SMS
+                </button>
+                <button
+                  type="button"
+                  style={styles.modalDoneBtn}
+                  onClick={() => {
+                    setRegisteredRiderSuccess(null);
+                    setActiveTab('riders');
+                  }}
+                >
+                  ✓ Done &amp; View in Roster
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1616,91 +3392,91 @@ const styles = {
   },
   notificationToast: {
     position: 'fixed',
-    top: '24px',
-    right: '28px',
+    top: '16px',
+    right: '20px',
     backgroundColor: '#0284c7',
     color: '#ffffff',
-    padding: '22px 38px',
-    borderRadius: '18px',
-    fontWeight: '900',
-    fontSize: '20px',
+    padding: '12px 24px',
+    borderRadius: '12px',
+    fontWeight: '800',
+    fontSize: '13.5px',
     zIndex: 99999,
-    boxShadow: '0 14px 44px rgba(0,0,0,0.7)',
-    border: '2px solid #38bdf8',
+    boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
+    border: '1px solid #38bdf8',
   },
   navbar: {
-    height: '110px',
+    height: '72px',
     width: '100%',
     borderBottom: '1px solid #1e293b',
     backgroundColor: '#0f172a',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '0 40px',
+    padding: '0 28px',
     boxSizing: 'border-box',
   },
-  navLeft: { display: 'flex', alignItems: 'center', gap: '20px' },
-  brandLogo: { width: '64px', height: '64px', backgroundColor: '#0284c7', color: '#ffffff', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '18px', fontSize: '34px', boxShadow: '0 4px 16px rgba(2, 132, 199, 0.5)' },
-  brandTitle: { margin: '0 0 4px 0', fontSize: '30px', fontWeight: '900', letterSpacing: '-0.02em', color: '#ffffff' },
-  brandSubtitle: { fontSize: '17px', color: '#94a3b8', fontWeight: '600' },
+  navLeft: { display: 'flex', alignItems: 'center', gap: '14px' },
+  brandLogo: { width: '40px', height: '40px', backgroundColor: '#0284c7', color: '#ffffff', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '22px', boxShadow: '0 2px 10px rgba(2, 132, 199, 0.4)' },
+  brandTitle: { margin: '0 0 2px 0', fontSize: '18px', fontWeight: '800', letterSpacing: '-0.01em', color: '#ffffff' },
+  brandSubtitle: { fontSize: '11.5px', color: '#94a3b8', fontWeight: '500' },
   navCenter: { display: 'flex', justifyContent: 'center' },
-  segmentedControl: { display: 'flex', backgroundColor: '#1e293b', padding: '8px', borderRadius: '20px', border: '1.5px solid #334155', gap: '8px' },
-  segmentButton: { padding: '16px 36px', borderRadius: '14px', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: '20px', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s ease' },
-  segmentActive: { backgroundColor: '#0284c7', color: '#ffffff', boxShadow: '0 4px 16px rgba(0,0,0,0.5)' },
-  navRight: { display: 'flex', alignItems: 'center', gap: '18px' },
-  liveIndicator: { display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'rgba(34, 197, 94, 0.14)', padding: '12px 22px', borderRadius: '28px', border: '2px solid rgba(34, 197, 94, 0.4)' },
-  liveDot: { width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#22c55e', boxShadow: '0 0 10px #22c55e' },
-  liveText: { fontSize: '18px', fontWeight: '900', color: '#22c55e' },
-  lastUpdatedTag: { fontSize: '18px', color: '#94a3b8', fontWeight: '700', backgroundColor: '#1e293b', padding: '12px 24px', borderRadius: '28px', border: '1.5px solid #334155' },
+  segmentedControl: { display: 'flex', backgroundColor: '#1e293b', padding: '4px', borderRadius: '12px', border: '1px solid #334155', gap: '4px' },
+  segmentButton: { padding: '8px 20px', borderRadius: '8px', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: '13px', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s ease' },
+  segmentActive: { backgroundColor: '#0284c7', color: '#ffffff', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' },
+  navRight: { display: 'flex', alignItems: 'center', gap: '12px' },
+  liveIndicator: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: '6px 12px', borderRadius: '16px', border: '1px solid rgba(34, 197, 94, 0.3)' },
+  liveDot: { width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e', boxShadow: '0 0 6px #22c55e' },
+  liveText: { fontSize: '12px', fontWeight: '700', color: '#22c55e' },
+  lastUpdatedTag: { fontSize: '12px', color: '#94a3b8', fontWeight: '600', backgroundColor: '#1e293b', padding: '6px 14px', borderRadius: '16px', border: '1px solid #334155' },
   
   kpiContainer: {
     display: 'grid',
     gridTemplateColumns: 'repeat(6, 1fr)',
-    gap: '20px',
-    padding: '30px 40px 0 40px',
+    gap: '14px',
+    padding: '16px 28px 0 28px',
     width: '100%',
     boxSizing: 'border-box',
   },
   kpiCard: {
     backgroundColor: '#0f172a',
-    borderRadius: '24px',
-    padding: '26px 22px',
-    border: '2px solid #1e293b',
+    borderRadius: '14px',
+    padding: '14px 16px',
+    border: '1.5px solid #1e293b',
     display: 'flex',
     alignItems: 'center',
-    gap: '20px',
+    gap: '12px',
     cursor: 'pointer',
     transition: 'all 0.2s',
   },
   kpiIcon: {
-    width: '64px',
-    height: '64px',
-    borderRadius: '18px',
+    width: '40px',
+    height: '40px',
+    borderRadius: '10px',
     backgroundColor: '#1e293b',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '32px',
+    fontSize: '20px',
     color: '#38bdf8',
   },
   kpiValue: {
-    fontSize: '42px',
+    fontSize: '22px',
     fontWeight: '900',
     color: '#ffffff',
     display: 'block',
     lineHeight: '1.1',
   },
   kpiLabel: {
-    fontSize: '16.5px',
+    fontSize: '11px',
     color: '#94a3b8',
-    fontWeight: '800',
+    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: '0.8px',
-    marginTop: '4px',
+    letterSpacing: '0.4px',
+    marginTop: '2px',
   },
 
   mainContent: {
-    padding: '32px 40px 64px 40px',
+    padding: '20px 28px 40px 28px',
     width: '100%',
     flex: 1,
     boxSizing: 'border-box',
@@ -1709,270 +3485,559 @@ const styles = {
   },
   gridDashboard: {
     display: 'grid',
-    gridTemplateColumns: '500px 1fr',
-    gap: '36px',
+    gridTemplateColumns: '380px 1fr',
+    gap: '24px',
     width: '100%',
     flex: 1,
   },
   leftPanel: {
     backgroundColor: '#0f172a',
-    border: '2px solid #1e293b',
-    borderRadius: '28px',
-    padding: '36px',
+    border: '1px solid #1e293b',
+    borderRadius: '18px',
+    padding: '24px',
     height: 'fit-content',
   },
   panelHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: '18px',
-    marginBottom: '28px',
+    gap: '12px',
+    marginBottom: '20px',
   },
   panelIconBadge: {
-    width: '58px',
-    height: '58px',
-    borderRadius: '18px',
+    width: '38px',
+    height: '38px',
+    borderRadius: '10px',
     backgroundColor: 'rgba(56, 189, 248, 0.15)',
     color: '#38bdf8',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '28px',
+    fontSize: '18px',
     fontWeight: 'bold',
   },
-  panelTitle: { margin: '0 0 6px 0', fontSize: '30px', fontWeight: '900', letterSpacing: '-0.02em', color: '#ffffff' },
-  panelDesc: { margin: 0, fontSize: '18px', color: '#94a3b8', lineHeight: 1.5 },
-  form: { display: 'flex', flexDirection: 'column', gap: '22px' },
-  fieldGroup: { display: 'flex', flexDirection: 'column', gap: '10px' },
-  label: { fontSize: '16.5px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px' },
-  input: { backgroundColor: '#1e293b', border: '1.5px solid #334155', borderRadius: '16px', padding: '18px 22px', color: '#ffffff', fontSize: '20px', fontWeight: '600', outline: 'none' },
-  submitBtn: { backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '16px', padding: '20px', fontWeight: '900', fontSize: '22px', cursor: 'pointer', marginTop: '12px', boxShadow: '0 6px 22px rgba(2, 132, 199, 0.45)' },
+  panelTitle: { margin: '0 0 2px 0', fontSize: '18px', fontWeight: '800', letterSpacing: '-0.01em', color: '#ffffff' },
+  panelDesc: { margin: 0, fontSize: '12.5px', color: '#94a3b8', lineHeight: 1.45 },
+  form: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  fieldGroup: { display: 'flex', flexDirection: 'column', gap: '5px' },
+  label: { fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  input: { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '11px 14px', color: '#ffffff', fontSize: '13px', outline: 'none' },
+  submitBtn: { backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '10px', padding: '13px', fontWeight: '800', fontSize: '14px', cursor: 'pointer', marginTop: '6px', boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)' },
   
   rightPanel: {
     backgroundColor: '#0f172a',
-    border: '2px solid #1e293b',
-    borderRadius: '28px',
-    padding: '36px',
+    border: '1px solid #1e293b',
+    borderRadius: '18px',
+    padding: '24px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '26px',
+    gap: '18px',
   },
   feedHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: '22px',
+    gap: '14px',
   },
   filterToolbar: {
     display: 'flex',
     alignItems: 'center',
-    gap: '16px',
+    gap: '12px',
     flexWrap: 'wrap',
   },
   searchBar: {
     backgroundColor: '#1e293b',
-    border: '1.5px solid #334155',
-    borderRadius: '16px',
-    padding: '16px 24px',
+    border: '1px solid #334155',
+    borderRadius: '10px',
+    padding: '10px 16px',
     color: '#ffffff',
-    fontSize: '19px',
-    width: '380px',
+    fontSize: '13px',
+    width: '300px',
     outline: 'none',
   },
-  filterPills: { display: 'flex', gap: '10px' },
+  filterPills: { display: 'flex', gap: '6px' },
   filterPillBtn: {
-    border: '1.5px solid',
-    borderRadius: '14px',
-    padding: '12px 20px',
-    fontSize: '16.5px',
-    fontWeight: '800',
+    border: '1px solid',
+    borderRadius: '8px',
+    padding: '7px 13px',
+    fontSize: '11px',
+    fontWeight: '700',
     cursor: 'pointer',
     transition: 'all 0.2s',
   },
   cardsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))',
-    gap: '24px',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+    gap: '16px',
     overflowY: 'auto',
     maxHeight: 'calc(100vh - 280px)',
-    paddingRight: '6px',
+    paddingRight: '4px',
   },
   dispatchCard: {
     backgroundColor: '#1e293b',
-    border: '1.5px solid #334155',
-    borderRadius: '22px',
-    padding: '26px',
+    border: '1px solid #334155',
+    borderRadius: '14px',
+    padding: '18px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    gap: '10px',
     cursor: 'pointer',
     transition: 'transform 0.15s ease, border-color 0.2s',
   },
   cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  cardRefGroup: { display: 'flex', alignItems: 'center', gap: '12px' },
-  cardId: { fontWeight: '900', fontSize: '21px', color: '#38bdf8', letterSpacing: '-0.01em' },
-  retailerBadge: { fontSize: '15px', backgroundColor: '#0f172a', color: '#94a3b8', padding: '5px 14px', borderRadius: '10px', border: '1px solid #334155', fontWeight: '700' },
-  badge: { padding: '8px 18px', borderRadius: '28px', fontSize: '15px', fontWeight: '900', letterSpacing: '0.8px', textTransform: 'uppercase' },
-  badge_OPEN: { backgroundColor: '#fef08a22', color: '#fde047', border: '2px solid #fef08a44' },
-  badge_ASSIGNED: { backgroundColor: '#818cf822', color: '#a5b4fc', border: '2px solid #818cf844' },
-  badge_PICKED_UP: { backgroundColor: '#38bdf822', color: '#38bdf8', border: '2px solid #38bdf844' },
-  badge_DELIVERED: { backgroundColor: '#10b98122', color: '#34d399', border: '2px solid #10b98144' },
-  cardDetails: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  detailRow: { margin: 0, fontSize: '18px', color: '#cbd5e1', lineHeight: 1.55 },
-  assignRow: { marginTop: '12px', display: 'flex', alignItems: 'center', gap: '14px', backgroundColor: '#0f172a', padding: '14px 18px', borderRadius: '16px', border: '1.5px solid #334155' },
-  assignLabel: { fontSize: '16.5px', fontWeight: '800', color: '#94a3b8' },
-  select: { backgroundColor: '#1e293b', border: '1.5px solid #334155', borderRadius: '12px', color: '#ffffff', padding: '12px 16px', fontSize: '18px', fontWeight: '600', outline: 'none', flex: 1 },
-  assignedRiderName: { fontSize: '18px', fontWeight: '900', color: '#38bdf8' },
-  cardFooter: { margin: '8px 0 0 0', fontSize: '16px', color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  timeTag: { fontSize: '16px', color: '#64748b', fontWeight: '600' },
-  inspectBtn: { fontSize: '16.5px', color: '#38bdf8', fontWeight: '800' },
+  cardRefGroup: { display: 'flex', alignItems: 'center', gap: '8px' },
+  cardId: { fontWeight: '800', fontSize: '14px', color: '#38bdf8', letterSpacing: '-0.01em' },
+  retailerBadge: { fontSize: '10.5px', backgroundColor: '#0f172a', color: '#94a3b8', padding: '3px 8px', borderRadius: '6px', border: '1px solid #334155', fontWeight: '600' },
+  badge: { padding: '4px 10px', borderRadius: '16px', fontSize: '10.5px', fontWeight: '800', letterSpacing: '0.5px', textTransform: 'uppercase' },
+  badge_OPEN: { backgroundColor: '#fef08a22', color: '#fde047', border: '1px solid #fef08a44' },
+  badge_ASSIGNED: { backgroundColor: '#818cf822', color: '#a5b4fc', border: '1px solid #818cf844' },
+  badge_PICKED_UP: { backgroundColor: '#38bdf822', color: '#38bdf8', border: '1px solid #38bdf844' },
+  badge_DELIVERED: { backgroundColor: '#10b98122', color: '#34d399', border: '1px solid #10b98144' },
+  cardDetails: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  detailRow: { margin: 0, fontSize: '12.5px', color: '#cbd5e1', lineHeight: 1.45 },
+  assignRow: { marginTop: '6px', display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#0f172a', padding: '8px 12px', borderRadius: '10px', border: '1px solid #334155' },
+  assignLabel: { fontSize: '11px', fontWeight: '700', color: '#94a3b8' },
+  select: { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#ffffff', padding: '6px 10px', fontSize: '12px', outline: 'none', flex: 1 },
+  assignedRiderName: { fontSize: '12px', fontWeight: '800', color: '#38bdf8' },
+  cardFooter: { margin: '4px 0 0 0', fontSize: '11px', color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  timeTag: { fontSize: '11px', color: '#64748b' },
+  inspectBtn: { fontSize: '11px', color: '#38bdf8', fontWeight: '700' },
   
-  retailerContainer: { display: 'flex', flexDirection: 'column', gap: '24px', width: '100%', flex: 1 },
-  retailerTopBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '22px' },
-  retailerControls: { display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' },
-  ledgerSearchBox: { backgroundColor: '#0f172a', border: '2px solid #334155', borderRadius: '16px', padding: '16px 24px', color: '#ffffff', fontSize: '19px', width: '480px', outline: 'none' },
-  tableWrapper: { backgroundColor: '#0f172a', border: '2px solid #1e293b', borderRadius: '28px', overflowX: 'auto', width: '100%' },
-  table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
-  trHead: { borderBottom: '2px solid #1e293b', backgroundColor: '#0a101d' },
-  th: { padding: '22px 28px', fontSize: '16px', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' },
-  trBody: { borderBottom: '1.5px solid #1e293b', cursor: 'pointer', transition: 'background-color 0.15s' },
-  td: { padding: '24px 28px', fontSize: '19px', color: '#f1f5f9', lineHeight: 1.5, fontWeight: '500' },
-  refCode: { color: '#38bdf8', fontWeight: '900', fontSize: '20px', letterSpacing: '-0.01em' },
-  riderPill: { backgroundColor: '#1e293b', padding: '8px 16px', borderRadius: '12px', color: '#a5b4fc', fontSize: '17px', fontWeight: '800' },
-  tokenCode: { fontSize: '16px', color: '#fde047', backgroundColor: '#1e293b', padding: '6px 14px', borderRadius: '10px', letterSpacing: '0.02em', fontWeight: '800' },
-  viewRowBtn: { backgroundColor: '#1e293b', border: '1.5px solid #334155', color: '#38bdf8', padding: '10px 22px', borderRadius: '12px', fontSize: '17px', fontWeight: '800', cursor: 'pointer' },
-  emptyState: { gridColumn: '1 / -1', textAlign: 'center', padding: '90px 28px', border: '2px dashed #334155', borderRadius: '24px' },
-  emptyIcon: { fontSize: '56px', marginBottom: '14px' },
-  emptyTitle: { margin: '0 0 8px 0', fontSize: '24px', fontWeight: '900', color: '#94a3b8' },
-  emptySubtitle: { margin: 0, fontSize: '18px', color: '#64748b' },
-  emptyTd: { padding: '110px', textAlign: 'center', color: '#64748b', fontStyle: 'italic', fontSize: '19px' },
-
-  riderPortalWrapper: { width: '100%', display: 'flex', flexDirection: 'column', flex: 1 },
-  riderDashboard: { display: 'flex', flexDirection: 'column', gap: '28px' },
-  riderControlHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '22px', backgroundColor: '#0f172a', padding: '28px 34px', borderRadius: '28px', border: '2px solid #1e293b' },
-  riderProfileBox: { display: 'flex', alignItems: 'center', gap: '18px', cursor: 'pointer' },
-  riderAvatarLarge: { width: '68px', height: '68px', borderRadius: '20px', backgroundColor: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '30px', boxShadow: '0 4px 18px rgba(2, 132, 199, 0.45)' },
-  riderRoleTag: { fontSize: '15px', color: '#38bdf8', fontWeight: '800', letterSpacing: '0.8px' },
-  riderProfileName: { margin: '4px 0 0 0', fontSize: '28px', fontWeight: '900', color: '#ffffff' },
-  switchRiderBtn: { backgroundColor: '#1e293b', border: '2px solid #334155', color: '#38bdf8', padding: '14px 24px', borderRadius: '14px', fontSize: '17px', fontWeight: '800', cursor: 'pointer', marginLeft: '16px' },
-  riderSummaryChips: { display: 'flex', gap: '18px' },
-  summaryChip: { backgroundColor: '#1e293b', padding: '16px 28px', borderRadius: '18px', border: '2px solid #334155', textAlign: 'center' },
-  summaryChipVal: { fontSize: '28px', fontWeight: '900', color: '#fde047', display: 'block' },
-  summaryChipLbl: { fontSize: '15px', color: '#94a3b8', fontWeight: '800', textTransform: 'uppercase', marginTop: '4px' },
-
-  missionBanner: {
-    backgroundColor: 'rgba(2, 132, 199, 0.15)',
-    border: '2px solid #0284c7',
-    borderRadius: '24px',
-    padding: '28px 34px',
+  /* ─── Retailer Portal & New Delivery Form Styles ─── */
+  retailerPortalWrapper: { display: 'flex', flexDirection: 'column', gap: '22px', width: '100%', flex: 1 },
+  retailerToolbar: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: '20px',
-    boxShadow: '0 8px 28px rgba(2, 132, 199, 0.3)',
+    gap: '14px',
+    backgroundColor: '#0f172a',
+    padding: '16px 22px',
+    borderRadius: '16px',
+    border: '1px solid #1e293b'
   },
-  missionTag: { fontSize: '15px', fontWeight: '900', color: '#38bdf8', letterSpacing: '0.8px', display: 'block', marginBottom: '4px' },
-  missionTitle: { margin: '0 0 6px 0', fontSize: '24px', fontWeight: '900', color: '#ffffff' },
-  missionSub: { margin: 0, fontSize: '18px', color: '#cbd5e1' },
-  resumeMissionBtn: { backgroundColor: '#0284c7', color: '#fff', border: 'none', padding: '16px 32px', borderRadius: '16px', fontSize: '18px', fontWeight: '900', cursor: 'pointer', boxShadow: '0 4px 14px rgba(2, 132, 199, 0.4)' },
+  retailerHubTitle: { margin: 0, fontSize: '18px', fontWeight: '800', color: '#ffffff' },
+  retailerHubDesc: { margin: '2px 0 0 0', fontSize: '12px', color: '#94a3b8' },
+  openNewDeliveryBtn: {
+    backgroundColor: '#16a34a',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '10px',
+    padding: '10px 20px',
+    fontSize: '13px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.4)'
+  },
   
-  tasksSection: { display: 'flex', flexDirection: 'column', gap: '20px' },
-  sectionHeading: { margin: 0, fontSize: '24px', fontWeight: '900', color: '#ffffff' },
-  riderCardsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '22px' },
-  riderTaskCard: { backgroundColor: '#0f172a', borderRadius: '24px', padding: '28px', border: '2px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '16px', cursor: 'pointer' },
-  taskCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
-  taskCardTag: { fontSize: '14px', color: '#94a3b8', fontWeight: '800', letterSpacing: '0.8px' },
-  taskCardTitle: { margin: '2px 0 0 0', fontSize: '22px', fontWeight: '900', color: '#38bdf8' },
-  taskCardContent: { backgroundColor: '#1e293b', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '8px' },
-  taskItem: { margin: 0, fontSize: '19px', color: '#ffffff', fontWeight: '700' },
-  taskCust: { margin: 0, fontSize: '17px', color: '#cbd5e1' },
-  taskDest: { margin: 0, fontSize: '17px', color: '#94a3b8' },
-  taskCardActions: { marginTop: '8px' },
-  primaryActionBtn: { width: '100%', height: '58px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '16px', fontSize: '19px', fontWeight: '900', cursor: 'pointer' },
-  completedPill: { width: '100%', display: 'block', textAlign: 'center', color: '#34d399', fontSize: '17px', fontWeight: '900', backgroundColor: 'rgba(16, 185, 129, 0.12)', padding: '14px', borderRadius: '14px', border: '1.5px solid rgba(16, 185, 129, 0.3)' },
+  newDeliveryContainer: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #1e293b',
+    borderRadius: '18px',
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px'
+  },
+  newDeliveryHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '12px',
+    borderBottom: '1px solid #1e293b',
+    paddingBottom: '16px'
+  },
+  newDeliveryIconBadge: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '10px',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    color: '#22c55e',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '20px'
+  },
+  newDeliveryTitle: { margin: 0, fontSize: '19px', fontWeight: '800', color: '#ffffff' },
+  zoneRoutingIndicator: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' },
+  zonePulseDot: { width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#22c55e', boxShadow: '0 0 6px #22c55e' },
+  zoneRoutingText: { fontSize: '12px', color: '#38bdf8', fontWeight: '600' },
+  resetFormBtn: { background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '6px 12px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer' },
+  
+  newDeliveryLayout: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+    gap: '24px'
+  },
+  newDeliveryForm: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+    flex: '1 1 500px'
+  },
+  formRow2: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '14px'
+  },
+  fieldLabel: { fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  requiredAsterisk: { color: '#ef4444', fontWeight: '900', marginLeft: '2px' },
+  fieldInput: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '10px',
+    padding: '11px 14px',
+    color: '#ffffff',
+    fontSize: '13.5px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box'
+  },
+  fieldSelect: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '10px',
+    padding: '11px 12px',
+    color: '#ffffff',
+    fontSize: '13px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box'
+  },
+  fieldTextarea: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '10px',
+    padding: '11px 14px',
+    color: '#ffffff',
+    fontSize: '13px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+    minHeight: '70px',
+    resize: 'vertical'
+  },
+  fieldErrorText: { fontSize: '11px', color: '#f87171', marginTop: '2px', fontWeight: '600' },
+  currencyInputContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '10px',
+    overflow: 'hidden'
+  },
+  currencyPrefixBadge: {
+    padding: '10px 14px',
+    backgroundColor: '#0f172a',
+    color: '#38bdf8',
+    fontSize: '12px',
+    fontWeight: '800',
+    borderRight: '1px solid #334155'
+  },
+  currencyInput: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    padding: '10px 14px',
+    color: '#ffffff',
+    fontSize: '13.5px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box'
+  },
+  formActionsRow: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: '12px',
+    marginTop: '10px',
+    flexWrap: 'wrap'
+  },
+  btnCancel: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    color: '#94a3b8',
+    padding: '12px 22px',
+    borderRadius: '10px',
+    fontSize: '13px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  btnSubmitGreen: {
+    backgroundColor: '#16a34a',
+    color: '#ffffff',
+    border: 'none',
+    padding: '12px 26px',
+    borderRadius: '10px',
+    fontSize: '14px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 16px rgba(22, 163, 74, 0.4)'
+  },
 
-  activeMissionScreen: { display: 'flex', flexDirection: 'column', gap: '26px' },
-  missionNavBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0f172a', padding: '22px 30px', borderRadius: '24px', border: '2px solid #1e293b' },
-  backBtn: { backgroundColor: '#1e293b', border: '2px solid #334155', color: '#38bdf8', padding: '12px 24px', borderRadius: '14px', fontSize: '17px', fontWeight: 'bold', cursor: 'pointer' },
-  missionTitleCenter: { textAlign: 'center' },
-  missionNavTag: { fontSize: '14px', color: '#94a3b8', fontWeight: '800', letterSpacing: '0.8px' },
-  missionNavTitle: { margin: '2px 0 0 0', fontSize: '24px', fontWeight: '900', color: '#ffffff' },
-  missionLayout: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' },
-  missionLeftCol: { display: 'flex', flexDirection: 'column', gap: '22px' },
-  missionRightCol: { display: 'flex', flexDirection: 'column', gap: '22px' },
-  missionCard: { backgroundColor: '#0f172a', borderRadius: '26px', padding: '28px', border: '2px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '12px' },
-  cardLabel: { fontSize: '15px', color: '#94a3b8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.8px' },
-  missionAddress: { margin: 0, fontSize: '26px', fontWeight: '900', color: '#ffffff' },
-  navGoogleBtn: { marginTop: '12px', display: 'block', textAlign: 'center', backgroundColor: '#1e293b', color: '#38bdf8', padding: '16px', borderRadius: '16px', fontSize: '17px', fontWeight: 'bold', textDecoration: 'none', border: '2px solid #334155' },
-  customerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  custNameBig: { fontSize: '24px', color: '#ffffff', display: 'block', fontWeight: '800' },
-  custPhoneText: { margin: '4px 0 0 0', fontSize: '18px', color: '#38bdf8' },
-  callBigBtn: { backgroundColor: '#16a34a', color: '#fff', textDecoration: 'none', padding: '14px 26px', borderRadius: '16px', fontSize: '17px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(22, 163, 74, 0.4)' },
-  packageBigText: { margin: 0, fontSize: '20px', color: '#f8fafc', fontWeight: '700' },
+  /* Live Delivery Summary Card */
+  summaryCard: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '16px',
+    padding: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+    height: 'fit-content',
+    flex: '1 1 320px'
+  },
+  summaryCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottom: '1px solid #334155',
+    paddingBottom: '12px'
+  },
+  summarySubTag: { fontSize: '9.5px', color: '#38bdf8', fontWeight: '800', letterSpacing: '0.6px' },
+  summaryHeading: { margin: '2px 0 0 0', fontSize: '16px', fontWeight: '800', color: '#ffffff' },
+  summaryLiveTag: { fontSize: '11px', color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.15)', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' },
+  summaryBody: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  summaryItem: { display: 'flex', flexDirection: 'column', gap: '2px' },
+  summaryLabel: { fontSize: '10px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.4px' },
+  summaryValue: { fontSize: '13px', color: '#f8fafc', fontWeight: '700' },
+  summaryValueMultiline: { fontSize: '12.5px', color: '#cbd5e1', lineHeight: 1.4 },
+  emptyPlaceholder: { color: '#64748b', fontStyle: 'italic', fontWeight: 'normal' },
+  summaryDivider: { height: '1px', backgroundColor: '#334155', margin: '2px 0' },
+  summaryRowInline: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
+  summaryPriorityBadge: { display: 'inline-block', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', border: '1px solid' },
+  summaryValueHighlight: { fontSize: '13.5px', color: '#fde047', fontWeight: '800', display: 'block', marginTop: '2px' },
+  summaryFeeHighlight: { fontSize: '13.5px', color: '#34d399', fontWeight: '800', display: 'block', marginTop: '2px' },
+  summaryEtaBadge: { fontSize: '11.5px', color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', marginTop: '2px', display: 'inline-block' },
+  summaryNotesBlock: { backgroundColor: '#0f172a', padding: '8px 12px', borderRadius: '8px', border: '1px solid #334155' },
+  summaryNotesText: { margin: '2px 0 0 0', fontSize: '11.5px', color: '#cbd5e1', fontStyle: 'italic' },
+  autoRouteFeatureBox: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#0f172a', padding: '10px 12px', borderRadius: '8px', border: '1px solid #334155', marginTop: '4px' },
   
-  verificationGateCard: { backgroundColor: '#0f172a', borderRadius: '26px', padding: '32px', border: '2px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '20px' },
-  gatesTitle: { margin: '0 0 4px 0', fontSize: '24px', fontWeight: '900', color: '#ffffff' },
-  gatesSub: { margin: 0, fontSize: '17px', color: '#94a3b8' },
-  gatesGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', marginTop: '10px' },
-  gateTile: { borderRadius: '20px', padding: '24px', border: '2px solid', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', cursor: 'pointer' },
-  gateIcon: { width: '56px', height: '56px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', color: '#fff' },
-  gateLabel: { fontSize: '18px', color: '#fff', textAlign: 'center', fontWeight: '700' },
-  gateSuccessTag: { fontSize: '15px', color: '#4ade80', fontWeight: 'bold' },
-  finalCompleteBtn: { width: '100%', height: '68px', color: '#ffffff', border: 'none', borderRadius: '18px', fontSize: '20px', fontWeight: '900', letterSpacing: '0.5px', marginTop: '14px', boxShadow: '0 6px 18px rgba(0,0,0,0.45)' },
+  retailerLedgerCard: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #1e293b',
+    borderRadius: '18px',
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '18px'
+  },
+  
+  tableWrapper: { backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '18px', overflowX: 'auto', width: '100%' },
+  table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
+  trHead: { borderBottom: '1px solid #1e293b', backgroundColor: '#0a101d' },
+  th: { padding: '14px 18px', fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px' },
+  trBody: { borderBottom: '1px solid #1e293b', cursor: 'pointer', transition: 'background-color 0.15s' },
+  td: { padding: '14px 18px', fontSize: '13px', color: '#cbd5e1', lineHeight: 1.45 },
+  refCode: { color: '#38bdf8', fontWeight: '800', fontSize: '13.5px', letterSpacing: '-0.01em' },
+  riderPill: { backgroundColor: '#1e293b', padding: '4px 10px', borderRadius: '8px', color: '#a5b4fc', fontSize: '12px', fontWeight: '700' },
+  tokenCode: { fontSize: '11px', color: '#fde047', backgroundColor: '#1e293b', padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.02em', fontWeight: '700' },
+  viewRowBtn: { backgroundColor: '#1e293b', border: '1px solid #334155', color: '#38bdf8', padding: '5px 12px', borderRadius: '6px', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer' },
+  emptyState: { gridColumn: '1 / -1', textAlign: 'center', padding: '60px 20px', border: '1px dashed #334155', borderRadius: '16px' },
+  emptyIcon: { fontSize: '40px', marginBottom: '8px' },
+  emptyTitle: { margin: '0 0 4px 0', fontSize: '16px', fontWeight: '700', color: '#94a3b8' },
+  emptySubtitle: { margin: 0, fontSize: '12px', color: '#64748b' },
+  emptyTd: { padding: '70px', textAlign: 'center', color: '#64748b', fontStyle: 'italic', fontSize: '13px' },
+
+  riderPortalWrapper: { width: '100%', display: 'flex', flexDirection: 'column', flex: 1 },
+  riderDashboard: { display: 'flex', flexDirection: 'column', gap: '20px' },
+  riderControlHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', backgroundColor: '#0f172a', padding: '18px 22px', borderRadius: '18px', border: '1px solid #1e293b' },
+  riderProfileBox: { display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer' },
+  riderAvatarLarge: { width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '18px', boxShadow: '0 2px 10px rgba(2, 132, 199, 0.4)' },
+  riderRoleTag: { fontSize: '10px', color: '#38bdf8', fontWeight: '800', letterSpacing: '0.6px' },
+  riderProfileName: { margin: '2px 0 0 0', fontSize: '18px', fontWeight: '800', color: '#ffffff' },
+  switchRiderBtn: { backgroundColor: '#1e293b', border: '1px solid #334155', color: '#38bdf8', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', marginLeft: '12px' },
+  riderSummaryChips: { display: 'flex', gap: '12px' },
+  summaryChip: { backgroundColor: '#1e293b', padding: '10px 18px', borderRadius: '12px', border: '1px solid #334155', textAlign: 'center' },
+  summaryChipVal: { fontSize: '18px', fontWeight: '900', color: '#fde047', display: 'block' },
+  summaryChipLbl: { fontSize: '10.5px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', marginTop: '2px' },
+
+  missionBanner: {
+    backgroundColor: 'rgba(2, 132, 199, 0.15)',
+    border: '1.5px solid #0284c7',
+    borderRadius: '16px',
+    padding: '16px 20px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '14px',
+    boxShadow: '0 4px 16px rgba(2, 132, 199, 0.2)',
+  },
+  missionTag: { fontSize: '10.5px', fontWeight: '900', color: '#38bdf8', letterSpacing: '0.6px', display: 'block', marginBottom: '2px' },
+  missionTitle: { margin: '0 0 3px 0', fontSize: '16px', fontWeight: '800', color: '#ffffff' },
+  missionSub: { margin: 0, fontSize: '12.5px', color: '#cbd5e1' },
+  resumeMissionBtn: { backgroundColor: '#0284c7', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontSize: '12.5px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 2px 10px rgba(2, 132, 199, 0.4)' },
+  
+  tasksSection: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  sectionHeading: { margin: 0, fontSize: '16px', fontWeight: '800', color: '#ffffff' },
+  riderCardsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' },
+  riderTaskCard: { backgroundColor: '#0f172a', borderRadius: '16px', padding: '18px', border: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '10px', cursor: 'pointer' },
+  taskCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
+  taskCardTag: { fontSize: '9.5px', color: '#94a3b8', fontWeight: '800', letterSpacing: '0.6px' },
+  taskCardTitle: { margin: '2px 0 0 0', fontSize: '15px', fontWeight: '800', color: '#38bdf8' },
+  taskCardContent: { backgroundColor: '#1e293b', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px' },
+  taskItem: { margin: 0, fontSize: '13px', color: '#ffffff', fontWeight: '600' },
+  taskCust: { margin: 0, fontSize: '12px', color: '#cbd5e1' },
+  taskDest: { margin: 0, fontSize: '12px', color: '#94a3b8' },
+  taskCardActions: { marginTop: '4px' },
+  primaryActionBtn: { width: '100%', height: '44px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: '800', cursor: 'pointer' },
+  completedPill: { width: '100%', display: 'block', textAlign: 'center', color: '#34d399', fontSize: '12px', fontWeight: '800', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '10px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' },
+
+  activeMissionScreen: { display: 'flex', flexDirection: 'column', gap: '18px' },
+  missionNavBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0f172a', padding: '14px 20px', borderRadius: '16px', border: '1px solid #1e293b' },
+  backBtn: { backgroundColor: '#1e293b', border: '1px solid #334155', color: '#38bdf8', padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' },
+  missionTitleCenter: { textAlign: 'center' },
+  missionNavTag: { fontSize: '9.5px', color: '#94a3b8', fontWeight: '800', letterSpacing: '0.6px' },
+  missionNavTitle: { margin: '2px 0 0 0', fontSize: '16px', fontWeight: '800', color: '#ffffff' },
+  missionLayout: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' },
+  missionLeftCol: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  missionRightCol: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  missionCard: { backgroundColor: '#0f172a', borderRadius: '18px', padding: '20px', border: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '8px' },
+  cardLabel: { fontSize: '10px', color: '#94a3b8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.6px' },
+  missionAddress: { margin: 0, fontSize: '17px', fontWeight: '800', color: '#ffffff' },
+  navGoogleBtn: { marginTop: '8px', display: 'block', textAlign: 'center', backgroundColor: '#1e293b', color: '#38bdf8', padding: '10px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none', border: '1px solid #334155' },
+  customerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  custNameBig: { fontSize: '15px', color: '#ffffff', display: 'block', fontWeight: '700' },
+  custPhoneText: { margin: '2px 0 0 0', fontSize: '12.5px', color: '#38bdf8' },
+  callBigBtn: { backgroundColor: '#16a34a', color: '#fff', textDecoration: 'none', padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', boxShadow: '0 2px 8px rgba(22, 163, 74, 0.4)' },
+  packageBigText: { margin: 0, fontSize: '14px', color: '#f8fafc', fontWeight: '600' },
+  
+  verificationGateCard: { backgroundColor: '#0f172a', borderRadius: '18px', padding: '22px', border: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '14px' },
+  gatesTitle: { margin: '0 0 2px 0', fontSize: '16px', fontWeight: '800', color: '#ffffff' },
+  gatesSub: { margin: 0, fontSize: '12px', color: '#94a3b8' },
+  gatesGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '6px' },
+  gateTile: { borderRadius: '14px', padding: '16px', border: '1.5px solid', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' },
+  gateIcon: { width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', color: '#fff' },
+  gateLabel: { fontSize: '12.5px', color: '#fff', textAlign: 'center', fontWeight: '600' },
+  gateSuccessTag: { fontSize: '10.5px', color: '#4ade80', fontWeight: 'bold' },
+  finalCompleteBtn: { width: '100%', height: '48px', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '14px', fontWeight: '800', letterSpacing: '0.5px', marginTop: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.4)' },
 
   /* Modal Details */
   modalOverlay: {
     position: 'fixed',
     inset: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 9999,
-    backdropFilter: 'blur(10px)',
-    padding: '28px',
+    backdropFilter: 'blur(8px)',
+    padding: '20px',
     boxSizing: 'border-box',
   },
   modalCard: {
     backgroundColor: '#1e293b',
-    borderRadius: '32px',
+    borderRadius: '22px',
     width: '100%',
-    maxWidth: '640px',
-    padding: '36px 42px',
-    border: '2px solid #334155',
-    boxShadow: '0 28px 70px rgba(0,0,0,0.75)',
+    maxWidth: '480px',
+    padding: '24px 28px',
+    border: '1px solid #334155',
+    boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '22px',
+    gap: '16px',
   },
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
-  modalSubTag: { fontSize: '15px', color: '#94a3b8', fontWeight: '900', letterSpacing: '1.2px' },
-  modalTitle: { margin: '4px 0 0 0', fontSize: '30px', fontWeight: '900', color: '#38bdf8' },
-  modalCloseBtn: { background: 'none', border: 'none', color: '#94a3b8', fontSize: '32px', cursor: 'pointer' },
-  modalBody: { display: 'flex', flexDirection: 'column', gap: '20px' },
-  modalStatusRow: { display: 'flex', gap: '16px', alignItems: 'center' },
-  modalGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' },
-  modalBlock: { backgroundColor: '#0f172a', borderRadius: '18px', padding: '20px 22px', border: '2px solid #334155', display: 'flex', flexDirection: 'column', gap: '6px' },
-  modalLabel: { fontSize: '15px', color: '#94a3b8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.8px' },
-  modalVal: { fontSize: '20px', color: '#ffffff', fontWeight: '900' },
-  modalSubVal: { fontSize: '17px', color: '#38bdf8' },
-  modalValText: { margin: '6px 0 0 0', fontSize: '18px', color: '#cbd5e1', lineHeight: 1.45 },
-  checklistRow: { display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: '#0f172a', padding: '18px', borderRadius: '16px', border: '2px solid #334155' },
-  modalFooter: { marginTop: '14px' },
-  modalDoneBtn: { width: '100%', height: '62px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '16px', fontSize: '20px', fontWeight: '900', cursor: 'pointer', boxShadow: '0 6px 20px rgba(2, 132, 199, 0.45)' },
+  modalSubTag: { fontSize: '10px', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px' },
+  modalTitle: { margin: '2px 0 0 0', fontSize: '20px', fontWeight: '900', color: '#38bdf8' },
+  modalCloseBtn: { background: 'none', border: 'none', color: '#94a3b8', fontSize: '20px', cursor: 'pointer' },
+  modalBody: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  modalStatusRow: { display: 'flex', gap: '10px', alignItems: 'center' },
+  modalGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
+  modalBlock: { backgroundColor: '#0f172a', borderRadius: '12px', padding: '12px 14px', border: '1px solid #334155', display: 'flex', flexDirection: 'column', gap: '3px' },
+  modalLabel: { fontSize: '10px', color: '#94a3b8', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  modalVal: { fontSize: '14px', color: '#ffffff', fontWeight: '700' },
+  modalSubVal: { fontSize: '11.5px', color: '#38bdf8' },
+  modalValText: { margin: '4px 0 0 0', fontSize: '12.5px', color: '#cbd5e1', lineHeight: 1.4 },
+  checklistRow: { display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#0f172a', padding: '12px', borderRadius: '10px', border: '1px solid #334155' },
+  modalFooter: { marginTop: '8px' },
+  modalDoneBtn: { width: '100%', height: '44px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '13.5px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)' },
   
-  testDirectLinkBtn: { display: 'block', textAlign: 'center', backgroundColor: '#0f172a', color: '#38bdf8', padding: '16px', borderRadius: '16px', fontSize: '17px', fontWeight: 'bold', textDecoration: 'none', border: '2px solid #0284c7' },
-  quickValidateBtn: { width: '100%', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', padding: '16px', borderRadius: '16px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)' },
+  /* QR Slip Dedicated Modal Styles */
+  qrSlipModalCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: '24px',
+    width: '100%',
+    maxWidth: '540px',
+    padding: '26px 30px',
+    border: '1.5px solid #38bdf8',
+    boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    maxHeight: '90vh',
+    overflowY: 'auto'
+  },
+  qrSlipStatusBanner: {
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    border: '1.5px solid #22c55e',
+    borderRadius: '12px',
+    padding: '10px 14px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2px',
+    textAlign: 'center'
+  },
+  qrSlipCodeContainer: {
+    backgroundColor: '#0f172a',
+    borderRadius: '16px',
+    padding: '16px',
+    border: '1px solid #334155',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '10px'
+  },
+  qrSlipCodeWhiteBox: {
+    backgroundColor: '#ffffff',
+    padding: '12px',
+    borderRadius: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
+  },
+  qrSlipModalActions: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '12px',
+    marginTop: '6px'
+  },
+  printSlipBtn: {
+    backgroundColor: '#0f172a',
+    border: '1.5px solid #38bdf8',
+    color: '#38bdf8',
+    borderRadius: '10px',
+    height: '46px',
+    fontSize: '13px',
+    fontWeight: '800',
+    cursor: 'pointer'
+  },
+  doneSlipBtn: {
+    backgroundColor: '#16a34a',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '10px',
+    height: '46px',
+    fontSize: '13.5px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.4)'
+  },
 
-  uploadTriggerZone: { padding: '44px 28px', borderRadius: '20px', border: '2px dashed #0284c7', backgroundColor: '#0f172a', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' },
-  uploadCameraIcon: { fontSize: '52px', marginBottom: '6px' },
-  celebrationCircle: { width: '90px', height: '90px', borderRadius: '50%', backgroundColor: 'rgba(34, 197, 94, 0.15)', border: '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  summaryDetailsCard: { width: '100%', backgroundColor: '#0f172a', borderRadius: '18px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'left', margin: '16px 0' },
-  summaryRow: { display: 'flex', justifyContent: 'space-between', fontSize: '17px' },
-  riderSelectTile: { display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 20px', borderRadius: '18px', border: '2px solid', cursor: 'pointer' },
-  riderAvatarMini: { width: '48px', height: '48px', borderRadius: '14px', backgroundColor: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '20px' },
-  activeTag: { fontSize: '14px', fontWeight: '900', color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.15)', padding: '4px 12px', borderRadius: '14px' },
+  testDirectLinkBtn: { display: 'block', textAlign: 'center', backgroundColor: '#0f172a', color: '#38bdf8', padding: '10px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none', border: '1px solid #0284c7' },
+  quickValidateBtn: { width: '100%', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', padding: '11px', borderRadius: '10px', fontSize: '12.5px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)' },
+
+  uploadTriggerZone: { padding: '30px 18px', borderRadius: '14px', border: '2px dashed #0284c7', backgroundColor: '#0f172a', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' },
+  uploadCameraIcon: { fontSize: '36px', marginBottom: '4px' },
+  celebrationCircle: { width: '60px', height: '60px', borderRadius: '50%', backgroundColor: 'rgba(34, 197, 94, 0.15)', border: '2px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  summaryDetailsCard: { width: '100%', backgroundColor: '#0f172a', borderRadius: '12px', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left', margin: '10px 0' },
+  summaryRow: { display: 'flex', justifyContent: 'space-between', fontSize: '12px' },
+  riderSelectTile: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '12px', border: '1.5px solid', cursor: 'pointer' },
+  riderAvatarMini: { width: '34px', height: '34px', borderRadius: '8px', backgroundColor: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '14px' },
+  activeTag: { fontSize: '10px', fontWeight: '900', color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.15)', padding: '2px 8px', borderRadius: '10px' },
 
   /* Mobile Phone Dedicated Verification Landing Screen */
   mobileVerifyContainer: {
@@ -1982,77 +4047,416 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '28px',
+    padding: '20px',
     boxSizing: 'border-box',
   },
   mobileVerifyCard: {
     backgroundColor: '#1e293b',
-    borderRadius: '32px',
-    padding: '40px 32px',
+    borderRadius: '20px',
+    padding: '28px 20px',
     width: '100%',
-    maxWidth: '520px',
-    border: '2px solid #334155',
-    boxShadow: '0 28px 70px rgba(0,0,0,0.75)',
+    maxWidth: '400px',
+    border: '1px solid #334155',
+    boxShadow: '0 20px 50px rgba(0,0,0,0.7)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     textAlign: 'center',
-    gap: '22px',
+    gap: '14px',
     boxSizing: 'border-box',
   },
   mobileVerifyDetails: {
     width: '100%',
     backgroundColor: '#0f172a',
-    borderRadius: '20px',
-    padding: '22px',
-    border: '2px solid #334155',
+    borderRadius: '14px',
+    padding: '14px',
+    border: '1px solid #334155',
     textAlign: 'left',
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    gap: '4px',
     boxSizing: 'border-box',
   },
   mobileConfirmBtn: {
     width: '100%',
-    height: '66px',
+    height: '48px',
     backgroundColor: '#16a34a',
     color: '#ffffff',
     border: 'none',
-    borderRadius: '18px',
-    fontSize: '20px',
-    fontWeight: '900',
+    borderRadius: '12px',
+    fontSize: '14px',
+    fontWeight: '800',
     cursor: 'pointer',
-    boxShadow: '0 6px 22px rgba(22, 163, 74, 0.45)'
+    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.4)'
   },
   verifySuccessBox: {
     width: '100%',
-    backgroundColor: 'rgba(34, 197, 94, 0.14)',
-    border: '2px solid #22c55e',
-    borderRadius: '20px',
-    padding: '28px 22px',
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    border: '1.5px solid #22c55e',
+    borderRadius: '14px',
+    padding: '18px 14px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '10px',
+    gap: '6px',
     boxSizing: 'border-box',
   },
   errorBanner: {
     backgroundColor: 'rgba(239, 68, 68, 0.15)',
     color: '#fca5a5',
-    border: '2px solid #ef4444',
-    padding: '14px 20px',
-    borderRadius: '14px',
-    fontSize: '16px',
+    border: '1px solid #ef4444',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    fontSize: '12px',
     textAlign: 'center',
     width: '100%',
     boxSizing: 'border-box',
   },
   returnHomeBtn: {
-    marginTop: '10px',
+    marginTop: '6px',
     color: '#38bdf8',
-    fontSize: '17px',
-    fontWeight: '900',
+    fontSize: '12px',
+    fontWeight: '700',
     textDecoration: 'none',
     cursor: 'pointer',
+  },
+  // ─── Rider PWA Onboarding Gateway & Fleet Management Styles ───
+  onboardingPageContainer: {
+    minHeight: '100vh',
+    width: '100vw',
+    backgroundColor: '#090d16',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px',
+    boxSizing: 'border-box',
+    fontFamily: '"Inter", Arial, Helvetica, sans-serif'
+  },
+  onboardingCard: {
+    backgroundColor: '#131c2e',
+    borderRadius: '24px',
+    padding: '32px 24px',
+    width: '100%',
+    maxWidth: '480px',
+    border: '1.5px solid #1e293b',
+    boxShadow: '0 25px 60px rgba(0,0,0,0.8)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    gap: '20px',
+    boxSizing: 'border-box'
+  },
+  onboardingHeaderGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '6px'
+  },
+  onboardingLogoBadge: {
+    width: '48px',
+    height: '48px',
+    backgroundColor: '#0284c7',
+    borderRadius: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '24px',
+    boxShadow: '0 4px 16px rgba(2, 132, 199, 0.4)'
+  },
+  onboardingBrandTitle: {
+    margin: 0,
+    fontSize: '22px',
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: '-0.4px'
+  },
+  onboardingSubTag: {
+    fontSize: '10.5px',
+    fontWeight: '800',
+    color: '#38bdf8',
+    letterSpacing: '0.8px'
+  },
+  onboardingLoadingBox: {
+    padding: '30px 20px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px'
+  },
+  onboardingContent: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    textAlign: 'left'
+  },
+  welcomeHeroBox: {
+    backgroundColor: 'rgba(2, 132, 199, 0.12)',
+    border: '1px solid rgba(56, 189, 248, 0.3)',
+    borderRadius: '16px',
+    padding: '16px',
+    textAlign: 'center'
+  },
+  welcomeHeroIcon: {
+    fontSize: '32px',
+    marginBottom: '4px'
+  },
+  welcomeHeroTitle: {
+    margin: '0 0 6px 0',
+    fontSize: '19px',
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  welcomeHeroSubtitle: {
+    margin: 0,
+    fontSize: '13px',
+    color: '#cbd5e1',
+    lineHeight: '1.5'
+  },
+  onboardingRiderCard: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #1e293b',
+    borderRadius: '16px',
+    padding: '16px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px'
+  },
+  onboardingAvatar: {
+    width: '44px',
+    height: '44px',
+    borderRadius: '12px',
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    fontSize: '18px',
+    fontWeight: '900',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  onboardingCodeTag: {
+    fontFamily: 'monospace',
+    fontSize: '11px',
+    fontWeight: 'bold',
+    backgroundColor: '#1e293b',
+    color: '#38bdf8',
+    padding: '2px 6px',
+    borderRadius: '6px'
+  },
+  pwaActiveBadge: {
+    fontSize: '10.5px',
+    fontWeight: '800',
+    color: '#22c55e',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    padding: '2px 8px',
+    borderRadius: '6px',
+    border: '1px solid #22c55e'
+  },
+  onboardingNameText: {
+    fontSize: '15.5px',
+    color: '#ffffff',
+    display: 'block',
+    marginTop: '4px'
+  },
+  onboardingMetaText: {
+    fontSize: '12px',
+    color: '#94a3b8',
+    display: 'block',
+    marginTop: '2px'
+  },
+  homeScreenPromptCard: {
+    backgroundColor: '#1e293b',
+    border: '1px dashed #38bdf8',
+    borderRadius: '14px',
+    padding: '12px 14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px'
+  },
+  onboardingContinueBtn: {
+    width: '100%',
+    height: '48px',
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '12px',
+    fontSize: '14px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 16px rgba(2, 132, 199, 0.4)',
+    transition: 'all 0.15s ease'
+  },
+  onboardingInvalidBox: {
+    padding: '20px 10px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px',
+    textAlign: 'center'
+  },
+  invalidIconCircle: {
+    width: '56px',
+    height: '56px',
+    borderRadius: '50%',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    border: '1.5px solid #ef4444',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '24px'
+  },
+  invalidTitle: {
+    margin: 0,
+    fontSize: '18px',
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  invalidMessage: {
+    margin: 0,
+    fontSize: '13px',
+    color: '#cbd5e1',
+    lineHeight: '1.5'
+  },
+  onboardingReturnBtn: {
+    marginTop: '8px',
+    backgroundColor: '#1e293b',
+    color: '#38bdf8',
+    border: '1px solid #334155',
+    padding: '10px 20px',
+    borderRadius: '10px',
+    fontSize: '13px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  riderTableAvatar: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    fontSize: '13px',
+    fontWeight: '800',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  pwaReadyBadge: {
+    fontSize: '11px',
+    fontWeight: '800',
+    color: '#4ade80',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    padding: '3px 8px',
+    borderRadius: '8px',
+    border: '1px solid #22c55e',
+    display: 'inline-flex',
+    alignItems: 'center'
+  },
+  pwaPendingBadge: {
+    fontSize: '11px',
+    fontWeight: '800',
+    color: '#fbbf24',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    padding: '3px 8px',
+    borderRadius: '8px',
+    border: '1px solid #f59e0b',
+    display: 'inline-flex',
+    alignItems: 'center'
+  },
+  actionBtnSecondary: {
+    padding: '6px 10px',
+    backgroundColor: '#1e293b',
+    color: '#ffffff',
+    border: '1px solid #334155',
+    borderRadius: '8px',
+    fontSize: '11.5px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  actionBtnShare: {
+    padding: '6px 10px',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    color: '#4ade80',
+    border: '1px solid #22c55e',
+    borderRadius: '8px',
+    fontSize: '11.5px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  actionBtnGhost: {
+    padding: '6px 10px',
+    backgroundColor: 'transparent',
+    color: '#94a3b8',
+    border: '1px solid #334155',
+    borderRadius: '8px',
+    fontSize: '11.5px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  onboardingSuccessRiderBanner: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #1e293b',
+    borderRadius: '14px',
+    padding: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px'
+  },
+  pwaLinkBoxContainer: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #334155',
+    borderRadius: '14px',
+    padding: '14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  pwaLinkInputGroup: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center'
+  },
+  pwaLinkInput: {
+    flex: 1,
+    height: '40px',
+    backgroundColor: '#1e293b',
+    border: '1px solid #38bdf8',
+    borderRadius: '8px',
+    padding: '0 10px',
+    color: '#38bdf8',
+    fontFamily: 'monospace',
+    fontSize: '12px',
+    fontWeight: 'bold',
+    outline: 'none'
+  },
+  copyLinkInsideBtn: {
+    height: '40px',
+    padding: '0 14px',
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '12.5px',
+    fontWeight: '800',
+    cursor: 'pointer'
+  },
+  onboardingSuccessActionsRow: {
+    display: 'flex',
+    gap: '10px',
+    marginTop: '6px'
+  },
+  shareWaBtn: {
+    flex: 1,
+    height: '44px',
+    backgroundColor: '#16a34a',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '10px',
+    fontSize: '13px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)'
   },
 };
