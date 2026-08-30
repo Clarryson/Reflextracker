@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reflex - Delivery Coordination System</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; color: #333; }
+        header { text-align: center; margin-bottom: 20px; }
+        .nav-tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .nav-tabs button { padding: 10px 20px; cursor: pointer; border: none; background: #ddd; font-weight: bold; border-radius: 5px; }
+        .nav-tabs button.active { background: #007bff; color: white; }
+        .view-panel { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 800px; margin: 0 auto; }
+        .view-panel.active { display: block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
+        th { background: #007bff; color: white; }
+        input, select { width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button.action-btn { background: #28a745; color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
+        button.action-btn:hover { background: #218838; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .Pending { background: #ffc107; color: #000; }
+        .Assigned { background: #17a2b8; color: white; }
+        .Picked.Up { background: #6f42c1; color: white; }
+        .Delivered { background: #28a745; color: white; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>⚡ Reflex Delivery System</h1>
+        <p>Live Nairobi Retail Coordination Dashboard</p>
+    </header>
+
+    <div class="nav-tabs">
+        <button onclick="switchView('retailer')" class="active" id="btn-retailer">Retailer Portal</button>
+        <button onclick="switchView('dispatcher')" id="btn-dispatcher">Dispatcher Panel</button>
+        <button onclick="switchView('rider')" id="btn-rider">Rider App View</button>
+    </div>
+
+    <div id="retailer" class="view-panel active">
+        <h2>📦 Log a New Delivery Request</h2>
+        <form id="delivery-form">
+            <label>Shop Name:</label>
+            <input type="text" id="retailer-name" value="ElectroShop Nairobi" required>
+            
+            <label>Customer Name:</label>
+            <input type="text" id="customer-name" placeholder="e.g., David Kamau" required>
+            
+            <label>Customer Phone:</label>
+            <input type="text" id="customer-phone" placeholder="e.g., +254711000000" required>
+            
+            <label>Delivery Address:</label>
+            <input type="text" id="address" placeholder="e.g., Moi Avenue, Nairobi CBD" required>
+            
+            <label>Item Description:</label>
+            <input type="text" id="item" placeholder="e.g., Bluetooth Speaker" required>
+            
+            <button type="submit" class="action-btn">Submit Request</button>
+        </form>
+
+        <h3>Active Shop Deliveries</h3>
+        <table>
+            <thead>
+                <tr><th>Item</th><th>Customer</th><th>Status</th><th>Assigned Rider</th></tr>
+            </thead>
+            <tbody id="retailer-table-body"></tbody>
+        </table>
+    </div>
+
+    <div id="dispatcher" class="view-panel">
+        <h2>🎛️ Dispatcher Assignment Dashboard</h2>
+        <table>
+            <thead>
+                <tr><th>Shop</th><th>Item & Address</th><th>Status</th><th>Assign Rider</th></tr>
+            </thead>
+            <tbody id="dispatcher-table-body"></tbody>
+        </table>
+    </div>
+
+    <div id="rider" class="view-panel">
+        <h2>🏍️ Rider Status Update Portal</h2>
+        <table>
+            <thead>
+                <tr><th>Order</th><th>Customer & Address</th><th>Current Status</th><th>Update Status</th></tr>
+            </thead>
+            <tbody id="rider-table-body"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const socket = io();
+        let allDeliveries = [];
+
+        function switchView(viewName) {
+            document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
+            document.getElementById(viewName).classList.add('active');
+            document.getElementById('btn-' + viewName).classList.add('active');
+        }
+
+        // Handle form submission
+        document.getElementById('delivery-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const payload = {
+                retailer: document.getElementById('retailer-name').value,
+                customer: document.getElementById('customer-name').value,
+                phone: document.getElementById('customer-phone').value,
+                address: document.getElementById('address').value,
+                item: document.getElementById('item').value
+            };
+            socket.emit('create_delivery', payload);
+            document.getElementById('customer-name').value = '';
+            document.getElementById('customer-phone').value = '';
+            document.getElementById('address').value = '';
+            document.getElementById('item').value = '';
+        });
+
+        // Listen for live updates from server
+        socket.on('init_data', (data) => {
+            allDeliveries = data;
+            renderAllTables();
+        });
+
+        socket.on('update_deliveries', (data) => {
+            allDeliveries = data;
+            renderAllTables();
+        });
+
+        function renderAllTables() {
+            const retailerTbody = document.getElementById('retailer-table-body');
+            const dispatcherTbody = document.getElementById('dispatcher-table-body');
+            const riderTbody = document.getElementById('rider-table-body');
+
+            retailerTbody.innerHTML = '';
+            dispatcherTbody.innerHTML = '';
+            riderTbody.innerHTML = '';
+
+            allDeliveries.forEach(d => {
+                // Retailer Table
+                retailerTbody.innerHTML += `<tr>
+                    <td>${d.item}</td>
+                    <td>${d.customer}</td>
+                    <td><span class="badge ${d.status}">${d.status}</span></td>
+                    <td>${d.rider}</td>
+                </tr>`;
+
+                // Dispatcher Table
+                dispatcherTbody.innerHTML += `<tr>
+                    <td>${d.retailer}</td>
+                    <td><b>${d.item}</b><br><small>${d.address}</small></td>
+                    <td><span class="badge ${d.status}">${d.status}</span></td>
+                    <td>
+                        <select onchange="assignRider(${d.id}, this.value)">
+                            <option value="">Select Rider</option>
+                            <option value="Rider Alex" ${d.rider==='Rider Alex'?'selected':''}>Rider Alex</option>
+                            <option value="Rider Brian" ${d.rider==='Rider Brian'?'selected':''}>Rider Brian</option>
+                            <option value="Rider Christine" ${d.rider==='Rider Christine'?'selected':''}>Rider Christine</option>
+                        </select>
+                    </td>
+                </tr>`;
+
+                // Rider Table
+                riderTbody.innerHTML += `<tr>
+                    <td><b>${d.item}</b><br><small>From: ${d.retailer}</small></td>
+                    <td>${d.customer}<br><small>${d.address}</small></td>
+                    <td><span class="badge ${d.status}">${d.status}</span></td>
+                    <td>
+                        <select onchange="updateStatus(${d.id}, this.value)">
+                            <option value="Pending" ${d.status==='Pending'?'selected':''}>Pending</option>
+                            <option value="Assigned" ${d.status==='Assigned'?'selected':''}>Assigned</option>
+                            <option value="Picked Up" ${d.status==='Picked Up'?'selected':''}>Picked Up</option>
+                            <option value="Delivered" ${d.status==='Delivered'?'selected':''}>Delivered</option>
+                        </select>
+                    </td>
+                </tr>`;
+            });
+        }
+
+        function assignRider(id, riderName) {
+            if(!riderName) return;
+            socket.emit('assign_rider', { id, rider: riderName });
+        }
+
+        function updateStatus(id, status) {
+            socket.emit('update_status', { id, status });
+        }
+    </script>
+</body>
+</html>
