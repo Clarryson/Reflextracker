@@ -1,5 +1,5 @@
 Real-Time Delivery Tracking & Management Platform
-REFLEX is a full-stack delivery management platform designed to connect retailers, dispatchers, and riders through a single real-time system.The platform manages the complete delivery journey, from creating a delivery to assigning a rider, confirming 
+REFLEX is a full-stack delivery management platform designed to connect retailers, dispatchers, and riders through a single real-time system.The platform manages the complete delivery journey, from creating a delivery to assigning a rider, confirming. 
 
 MVP Users
 Retailer
