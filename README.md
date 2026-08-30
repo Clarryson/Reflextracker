@@ -1,23 +1,17 @@
-<<<<<<< HEAD
- Droplink Web Frontend
+# REFLEX — Real-Time Delivery Tracking & Management Platform 🇰🇪
 
-The professional dispatcher and retailer control plane for the **Frop Link** real-time delivery platform, built with React, Vite, and Socket.io.
-
- Key Features
-Dispatcher View: Create new delivery assignments with recipient phone numbers, item descriptions, and destination nodes.
-Retailer Portal: Enterprise delivery ledger with live searching and status audit trails.
-Real-Time Telemetry: Instant synchronization with backend web socket events.
-
- Getting Started
-1. Run `npm install` to install dependencies.
-2. Run `npm install socket.io-client` for real-time events.
-3. Run `npm run dev` to launch the local development server.
-=======
-# REFLEX — Rider Mobile Progressive Web App (PWA) 🇰🇪
-
-Mobile Rider Progressive Web Application for the **REFLEX Real-Time Delivery Tracking & Management Platform**, specifically engineered for Kenya's delivery ecosystem (motorcycle bodaboda riders, couriers, and couriers operating under intermittent network coverage).
+Enterprise delivery tracking and dispatcher control plane with an offline-first Rider Progressive Web App (PWA), engineered specifically for Kenya's delivery ecosystem (motorcycle bodaboda riders, couriers, and merchants operating under intermittent network coverage).
 
 ---
+
+## 🏗️ Architecture Overview
+
+- **Backend & Telemetry Gateway** (`server.js`): Real-time Socket.io and Express event routing engine.
+- **Rider Mobile PWA** (`apps/mobile`): Offline-first outbox pattern, dual QR/PIN verification gates, canvas compression (<400KB), GPS telemetry, and screen WakeLock lifecycle management.
+- **Dispatcher & Retailer Web Portal** (`apps/web`): Live control plane for order assignment, retailer ledgers, and telemetry monitoring.
+
+---
+
 
 ## 📱 Features Built for Kenya Logistics
 
@@ -67,38 +61,32 @@ npm run build
 
 ```
 REFLEX/
+├── server.js                      # Real-time Socket.io & REST telemetry server
 ├── apps/
-│   └── mobile/
-│       ├── public/
-│       │   ├── manifest.json              # PWA Install manifest
-│       │   └── favicon.svg
+│   ├── mobile/                    # Rider Mobile PWA
+│   │   ├── public/
+│   │   │   ├── manifest.json      # PWA Install manifest
+│   │   │   └── favicon.svg
+│   │   ├── src/
+│   │   │   ├── components/        # Camera, QR, Offline & Summary components
+│   │   │   ├── screens/           # RiderHomeScreen & ActiveDeliveryScreen
+│   │   │   ├── services/          # Canvas compressor, IndexedDB outbox, API
+│   │   │   ├── hooks/             # Socket.io, vibrations & network sync hooks
+│   │   │   └── App.jsx
+│   │   ├── package.json
+│   │   └── vite.config.js
+│   └── web/                       # Dispatcher & Retailer Web Control Plane
 │       ├── src/
-│       │   ├── components/
-│       │   │   ├── CameraProofModal.jsx   # Native camera capture & preview
-│       │   │   ├── QRScannerModal.jsx     # QR Code & PIN fallback modal
-│       │   │   ├── DeliveryCard.jsx       # Delivery card & map deep links
-│       │   │   ├── OfflineBanner.jsx      # Connection & pending sync bar
-│       │   │   └── DeliverySummaryModal.jsx # Completion summary card
-│       │   ├── screens/
-│       │   │   ├── RiderHomeScreen.jsx    # Assigned tasks & standby view
-│       │   │   └── ActiveDeliveryScreen.jsx # In-transit transit flow & hardware
-│       │   ├── services/
-│       │   │   ├── imageCompressor.js     # Canvas resize & watermark (<400KB)
-│       │   │   ├── outboxStore.js         # IndexedDB mutation queue
-│       │   │   └── api.js                 # REST client with offline fallback
-│       │   ├── hooks/
-│       │   │   ├── useRiderSocket.js      # Socket.io listeners, chime & vibration
-│       │   │   └── useNetworkStatus.js    # Online/offline status & auto-flush
-│       │   ├── App.jsx
-│       │   ├── index.css
-│       │   └── main.jsx
+│       │   ├── App.jsx            # Dispatcher form & Retailer ledger dashboard
+│       │   └── index.css
 │       ├── package.json
 │       └── vite.config.js
 └── docs/
+
     ├── Connection.md
     ├── Delivery Completion.md
     ├── Internet.md
     ├── Proof Delivery.md
     └── Updates.md
 ```
->>>>>>> 1372660d9542104212b1c7163e4ac9d8a0fbeb94
+
