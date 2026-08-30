@@ -1302,84 +1302,132 @@ export default function App() {
 
       {/* ─── 3. FULL-SCREEN WORKSPACE (TABS) ─── */}
       <main style={styles.mainContent}>
-        {/* ── TAB 1: DISPATCHER CONSOLE ── */}
+        {/* ── TAB 1: DISPATCHER CONTROL CENTER ── */}
         {activeTab === 'dispatcher' && (
-          <div style={styles.gridDashboard}>
-            {/* Left Order Form */}
-            <div style={styles.leftPanel}>
-              <div style={styles.panelHeader}>
-                <div style={styles.panelIconBadge}>➕</div>
+          <div style={styles.dispatcherSection}>
+            {/* Control Center Header */}
+            <div style={styles.hubToolbar}>
+              <div style={styles.hubTitleGroup}>
+                <div style={{ ...styles.hubIconBadge, backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
+                  🎛️
+                </div>
                 <div>
-                  <h2 style={styles.panelTitle}>Create Delivery Order</h2>
-                  <p style={styles.panelDesc}>Persists live to MySQL database on Railway.</p>
+                  <h2 style={styles.hubTitle}>DISPATCHER CONTROL CENTER</h2>
+                  <span style={styles.hubSubtitle}>
+                    Deliveries waiting for rider assignment &amp; fleet operations
+                  </span>
                 </div>
               </div>
 
-              <form onSubmit={handleCreateOrder} style={styles.form}>
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Recipient Name</label>
-                  <input
-                    style={styles.input}
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="e.g. Amina Wanjiru"
-                    required
-                  />
-                </div>
-
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Recipient Phone Number</label>
-                  <input
-                    style={styles.input}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="e.g. 0712345678"
-                    required
-                  />
-                </div>
-
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Package / Item Description</label>
-                  <input
-                    style={styles.input}
-                    value={itemDescription}
-                    onChange={(e) => setItemDescription(e.target.value)}
-                    placeholder="e.g. Fragrance Gift Set (50ml)"
-                    required
-                  />
-                </div>
-
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Destination Delivery Address</label>
-                  <input
-                    style={styles.input}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="e.g. Westlands, Nairobi"
-                    required
-                  />
-                </div>
-
-                <button type="submit" style={styles.submitBtn} disabled={isSubmitting}>
-                  {isSubmitting ? 'Logging to Railway...' : '🚀 Create & Dispatch Order'}
+              <div style={styles.hubActions}>
+                <button
+                  style={styles.actionBtnSecondary}
+                  onClick={fetchDeliveries}
+                  disabled={loading}
+                >
+                  {loading ? '⏳ Syncing...' : '🔄 Refresh Queue'}
                 </button>
-              </form>
+                <button
+                  style={styles.openNewDeliveryBtn}
+                  onClick={() => setActiveTab('riders')}
+                >
+                  👥 Manage Fleet Riders ({riders.length})
+                </button>
+              </div>
             </div>
 
-            {/* Right Live Dispatch Feed */}
-            <div style={styles.rightPanel}>
-              <div style={styles.feedHeader}>
+            {/* Metrics Bar */}
+            <div style={styles.kpiContainer}>
+              <div
+                style={{
+                  ...styles.kpiCard,
+                  flex: 1,
+                  borderColor: statusFilter === 'OPEN' ? '#fde047' : '#1e293b',
+                  backgroundColor: statusFilter === 'OPEN' ? 'rgba(253, 224, 71, 0.05)' : '#131c2e'
+                }}
+                onClick={() => setStatusFilter('OPEN')}
+              >
+                <div style={{ ...styles.kpiIcon, color: '#fde047', backgroundColor: 'rgba(253, 224, 71, 0.12)' }}>
+                  ⏳
+                </div>
                 <div>
-                  <h2 style={styles.panelTitle}>Live Telemetry & Dispatches ({filteredDeliveries.length})</h2>
-                  <p style={styles.panelDesc}>Live database records streaming from Railway.</p>
+                  <span style={{ ...styles.kpiValue, color: '#fde047' }}>{pendingCount}</span>
+                  <span style={styles.kpiLabel}>Pending Assignment</span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  ...styles.kpiCard,
+                  flex: 1,
+                  borderColor: statusFilter === 'ASSIGNED' ? '#a5b4fc' : '#1e293b',
+                  backgroundColor: statusFilter === 'ASSIGNED' ? 'rgba(165, 180, 252, 0.05)' : '#131c2e'
+                }}
+                onClick={() => setStatusFilter('ASSIGNED')}
+              >
+                <div style={{ ...styles.kpiIcon, color: '#a5b4fc', backgroundColor: 'rgba(165, 180, 252, 0.12)' }}>
+                  🚴
+                </div>
+                <div>
+                  <span style={{ ...styles.kpiValue, color: '#a5b4fc' }}>{assignedCount}</span>
+                  <span style={styles.kpiLabel}>Assigned to Rider</span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  ...styles.kpiCard,
+                  flex: 1,
+                  borderColor: statusFilter === 'PICKED_UP' ? '#38bdf8' : '#1e293b',
+                  backgroundColor: statusFilter === 'PICKED_UP' ? 'rgba(56, 189, 248, 0.05)' : '#131c2e'
+                }}
+                onClick={() => setStatusFilter('PICKED_UP')}
+              >
+                <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>
+                  🚚
+                </div>
+                <div>
+                  <span style={{ ...styles.kpiValue, color: '#38bdf8' }}>{transitCount}</span>
+                  <span style={styles.kpiLabel}>In Transit</span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  ...styles.kpiCard,
+                  flex: 1,
+                  borderColor: statusFilter === 'DELIVERED' ? '#22c55e' : '#1e293b',
+                  backgroundColor: statusFilter === 'DELIVERED' ? 'rgba(34, 197, 94, 0.05)' : '#131c2e'
+                }}
+                onClick={() => setStatusFilter('DELIVERED')}
+              >
+                <div style={{ ...styles.kpiIcon, color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.12)' }}>
+                  ✓
+                </div>
+                <div>
+                  <span style={{ ...styles.kpiValue, color: '#22c55e' }}>{deliveredCount}</span>
+                  <span style={styles.kpiLabel}>Completed Deliveries</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Delivery Queue Container */}
+            <div style={styles.tableCard}>
+              <div style={styles.tableHeaderBar}>
+                <div>
+                  <h3 style={styles.tableTitle}>DELIVERY QUEUE</h3>
+                  <span style={styles.tableSubtitle}>
+                    Select and assign available fleet riders to open merchant delivery orders
+                  </span>
                 </div>
 
-                <div style={styles.filterToolbar}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <input
-                    style={styles.searchBar}
-                    placeholder="Search by ID, customer, item, or address..."
+                    type="text"
+                    placeholder="🔍 Search reference, merchant, recipient, item..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    style={styles.tableSearchInput}
                   />
 
                   <div style={styles.filterPills}>
@@ -1388,97 +1436,134 @@ export default function App() {
                         key={filter}
                         onClick={() => setStatusFilter(filter)}
                         style={{
-                          ...styles.filterPillBtn,
-                          backgroundColor: statusFilter === filter ? '#0284c7' : '#1e293b',
-                          color: statusFilter === filter ? '#ffffff' : '#94a3b8',
-                          borderColor: statusFilter === filter ? '#38bdf8' : '#334155',
+                          ...styles.filterPill,
+                          ...(statusFilter === filter ? styles.filterPillActive : {})
                         }}
                       >
-                        {filter}
+                        {filter === 'ALL'
+                          ? `All (${deliveries.length})`
+                          : filter === 'OPEN'
+                          ? `Pending (${pendingCount})`
+                          : filter === 'ASSIGNED'
+                          ? `Assigned (${assignedCount})`
+                          : filter === 'PICKED_UP'
+                          ? `In Transit (${transitCount})`
+                          : `Delivered (${deliveredCount})`}
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
 
-              <div style={styles.cardsGrid}>
+              {/* Delivery Queue Cards Grid */}
+              <div style={styles.dispatcherGrid}>
                 {loading ? (
                   <div style={styles.emptyState}>
-                    <p style={styles.emptyTitle}>Connecting to live Railway database...</p>
+                    <p style={styles.emptyTitle}>Connecting to live database...</p>
                   </div>
                 ) : filteredDeliveries.length === 0 ? (
                   <div style={styles.emptyState}>
                     <div style={styles.emptyIcon}>📦</div>
-                    <p style={styles.emptyTitle}>No matching delivery dispatches found</p>
+                    <p style={styles.emptyTitle}>No matching delivery dispatches found in this queue view</p>
                   </div>
                 ) : (
-                  filteredDeliveries.map((item) => (
-                    <div
-                      key={item.id}
-                      style={styles.dispatchCard}
-                      onClick={() => setInspectedWaybill(item)}
-                    >
-                      <div style={styles.cardHeader}>
-                        <div style={styles.cardRefGroup}>
-                          <span style={styles.cardId}>{item.reference || `DEL-#${item.id}`}</span>
-                          {item.retailerName && <span style={styles.retailerBadge}>{item.retailerName}</span>}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {item.qrVerified ? (
-                            <span style={{ fontSize: '10px', fontWeight: '900', color: '#4ade80', backgroundColor: 'rgba(34, 197, 94, 0.15)', padding: '3px 8px', borderRadius: '12px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-                              ✓ QR VERIFIED
+                  filteredDeliveries.map((item) => {
+                    const isOpen = item.status === 'OPEN' || !item.riderName;
+
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          ...styles.dispatcherQueueCard,
+                          borderColor: isOpen ? '#f59e0b' : item.status === 'PICKED_UP' ? '#38bdf8' : item.status === 'DELIVERED' ? '#22c55e' : '#6366f1'
+                        }}
+                        onClick={() => setInspectedWaybill(item)}
+                      >
+                        {/* Header Row */}
+                        <div style={styles.queueCardHeader}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <code style={styles.refCodeLarge}>
+                              {item.reference || `DEL-#${item.id}`}
+                            </code>
+                            <span style={styles.retailerBadge}>
+                              🏪 {item.retailerName || 'Kamau Electronics'}
                             </span>
-                          ) : null}
-                          <span style={{ ...styles.badge, ...styles[`badge_${item.status}`] }}>
-                            {item.status}
-                          </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {item.qrVerified && (
+                              <span style={styles.pwaReadyBadge}>✓ QR VERIFIED</span>
+                            )}
+                            <span style={{ ...styles.badge, ...styles[`badge_${item.status}`] }}>
+                              {item.status || 'OPEN'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Content Body */}
+                        <div style={styles.queueCardBody}>
+                          <div style={styles.queueItemRow}>
+                            <span style={styles.queueItemLabel}>Recipient:</span>
+                            <strong style={styles.queueItemValue}>
+                              {item.customerName} {item.customerPhone ? `(${item.customerPhone})` : ''}
+                            </strong>
+                          </div>
+
+                          <div style={styles.queueItemRow}>
+                            <span style={styles.queueItemLabel}>Destination:</span>
+                            <span style={styles.queueItemValue}>
+                              {item.deliveryAddress}
+                            </span>
+                          </div>
+
+                          <div style={styles.queueItemRow}>
+                            <span style={styles.queueItemLabel}>Item / Description:</span>
+                            <strong style={{ ...styles.queueItemValue, color: '#f8fafc' }}>
+                              {item.itemDescription}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {/* Assignment Control Footer */}
+                        <div style={styles.queueCardFooter} onClick={(e) => e.stopPropagation()}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '11px', color: '#64748b' }}>
+                              🕒 {item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                            </span>
+                            <button
+                              type="button"
+                              style={styles.viewRowBtn}
+                              onClick={() => setInspectedWaybill(item)}
+                            >
+                              📱 View QR ↗
+                            </button>
+                          </div>
+
+                          <div style={styles.assignControlGroup}>
+                            <label style={styles.assignControlLabel}>Rider:</label>
+                            <select
+                              style={{
+                                ...styles.assignSelect,
+                                borderColor: isOpen ? '#f59e0b' : '#38bdf8',
+                                backgroundColor: isOpen ? 'rgba(245, 158, 11, 0.1)' : '#1e293b'
+                              }}
+                              value={item.riderId || ''}
+                              onChange={(e) => handleAssignRider(item.id, e.target.value)}
+                            >
+                              <option value="" disabled>
+                                [ Assign Rider ▼ ]
+                              </option>
+                              {riders.map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  🚴 {r.name} ({r.phone})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       </div>
-
-                      <div style={styles.cardDetails}>
-                        <p style={styles.detailRow}>
-                          <strong>Recipient:</strong> {item.customerName} ({item.customerPhone})
-                        </p>
-                        <p style={styles.detailRow}>
-                          <strong>Item:</strong> {item.itemDescription}
-                        </p>
-                        <p style={styles.detailRow}>
-                          <strong>Destination:</strong> {item.deliveryAddress}
-                        </p>
-                      </div>
-
-                      <div style={styles.assignRow} onClick={(e) => e.stopPropagation()}>
-                        <span style={styles.assignLabel}>Assigned Rider:</span>
-                        {item.status === 'OPEN' || !item.riderName ? (
-                          <select
-                            style={styles.select}
-                            defaultValue=""
-                            onChange={(e) => handleAssignRider(item.id, e.target.value)}
-                          >
-                            <option value="" disabled>
-                              Assign Rider...
-                            </option>
-                            {riders.map((r) => (
-                              <option key={r.id} value={r.id}>
-                                {r.name} ({r.phone})
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span style={styles.assignedRiderName}>
-                            🚴 {item.riderName}
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={styles.cardFooter}>
-                        <span style={styles.timeTag}>
-                          🕒 {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>Click to view details</span>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -4458,5 +4543,102 @@ const styles = {
     fontWeight: '800',
     cursor: 'pointer',
     boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)'
+  },
+  // ─── Dispatcher Control Center Styles ───
+  dispatcherSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+    width: '100%',
+    boxSizing: 'border-box'
+  },
+  dispatcherGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+    gap: '16px',
+    marginTop: '16px'
+  },
+  dispatcherQueueCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: '16px',
+    border: '1.5px solid #1e293b',
+    padding: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    transition: 'all 0.18s ease',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+    cursor: 'pointer'
+  },
+  queueCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '1px solid #1e293b',
+    paddingBottom: '10px'
+  },
+  refCodeLarge: {
+    fontSize: '14px',
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    color: '#38bdf8',
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    padding: '3px 8px',
+    borderRadius: '6px'
+  },
+  queueCardBody: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px'
+  },
+  queueItemRow: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '8px',
+    fontSize: '13px'
+  },
+  queueItemLabel: {
+    color: '#94a3b8',
+    fontWeight: '700',
+    minWidth: '70px',
+    fontSize: '12.5px'
+  },
+  queueItemValue: {
+    color: '#cbd5e1',
+    flex: 1,
+    wordBreak: 'break-word'
+  },
+  queueCardFooter: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTop: '1px solid #1e293b',
+    paddingTop: '12px',
+    marginTop: '4px',
+    flexWrap: 'wrap',
+    gap: '10px'
+  },
+  assignControlGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  assignControlLabel: {
+    fontSize: '12px',
+    fontWeight: '800',
+    color: '#f8fafc'
+  },
+  assignSelect: {
+    height: '36px',
+    borderRadius: '8px',
+    border: '1.5px solid #38bdf8',
+    backgroundColor: '#1e293b',
+    color: '#ffffff',
+    fontSize: '12.5px',
+    fontWeight: '700',
+    padding: '0 10px',
+    outline: 'none',
+    cursor: 'pointer',
+    maxWidth: '220px'
   },
 };
