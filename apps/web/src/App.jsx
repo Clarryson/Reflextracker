@@ -130,26 +130,22 @@ export default function App() {
     if (tokenCache.current[key]) return tokenCache.current[key];
 
     let email = import.meta.env.VITE_DISPATCHER_EMAIL || 'omondi@reflex.co.ke';
-    let password = import.meta.env.VITE_DISPATCHER_PASSWORD || '';
+    let password = import.meta.env.VITE_DISPATCHER_PASSWORD || 'Password123!';
     
     if (role === 'retailer') {
       email = import.meta.env.VITE_RETAILER_EMAIL || 'kamau@electronics.co.ke';
-      password = import.meta.env.VITE_RETAILER_PASSWORD || '';
+      password = import.meta.env.VITE_RETAILER_PASSWORD || 'Password123!';
     } else if (role === 'rider') {
       if (specificRiderId === '5') {
         email = import.meta.env.VITE_RIDER_ID_5_EMAIL || 'grace@rider.co.ke';
-        password = import.meta.env.VITE_RIDER_ID_5_PASSWORD || '';
+        password = import.meta.env.VITE_RIDER_ID_5_PASSWORD || 'Password123!';
       } else if (specificRiderId === '6') {
         email = import.meta.env.VITE_RIDER_ID_6_EMAIL || 'james@rider.co.ke';
-        password = import.meta.env.VITE_RIDER_ID_6_PASSWORD || '';
+        password = import.meta.env.VITE_RIDER_ID_6_PASSWORD || 'Password123!';
       } else {
         email = import.meta.env.VITE_RIDER_ID_4_EMAIL || 'brian@rider.co.ke';
-        password = import.meta.env.VITE_RIDER_ID_4_PASSWORD || '';
+        password = import.meta.env.VITE_RIDER_ID_4_PASSWORD || 'Password123!';
       }
-    }
-
-    if (!password) {
-      console.warn(`Password not configured in .env.local for role '${role}'. Add VITE_${role.toUpperCase()}_PASSWORD`);
     }
 
     try {

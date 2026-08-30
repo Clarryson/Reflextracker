@@ -19,14 +19,11 @@ const riderTokens = {};
  */
 function getRiderCredentials(riderId) {
   const id = String(riderId || '4');
-  const email = import.meta.env[`VITE_RIDER_ID_${id}_EMAIL`];
-  const password = import.meta.env[`VITE_RIDER_ID_${id}_PASSWORD`];
+  const defaultEmail = id === '5' ? 'grace@rider.co.ke' : id === '6' ? 'james@rider.co.ke' : 'brian@rider.co.ke';
+  const email = import.meta.env[`VITE_RIDER_ID_${id}_EMAIL`] || defaultEmail;
+  const password = import.meta.env[`VITE_RIDER_ID_${id}_PASSWORD`] || 'Password123!';
   
-  if (!email || !password) {
-    console.warn(`Rider credentials not found in environment for ID ${id}. Set VITE_RIDER_ID_${id}_EMAIL and VITE_RIDER_ID_${id}_PASSWORD in .env.local`);
-  }
-  
-  return { email: email || '', password: password || '' };
+  return { email, password };
 }
 
 async function getRiderAuthToken(riderId) {
