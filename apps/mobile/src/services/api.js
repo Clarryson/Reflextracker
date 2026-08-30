@@ -10,20 +10,30 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://backend-productio
 // Cached token per rider
 const riderTokens = {};
 
-const RIDER_CREDENTIALS = {
-  '4': { email: 'brian@rider.co.ke', password: 'Password123!' },
-  '5': { email: 'grace@rider.co.ke', password: 'Password123!' },
-  '6': { email: 'james@rider.co.ke', password: 'Password123!' },
-  'rider-nairobi-01': { email: 'brian@rider.co.ke', password: 'Password123!' },
-  'rider-cbd-02': { email: 'grace@rider.co.ke', password: 'Password123!' },
-  'rider-westlands-03': { email: 'james@rider.co.ke', password: 'Password123!' },
-};
+/**
+ * Get rider credentials from environment variables.
+ * Credentials are defined as:
+ * - VITE_RIDER_ID_4_EMAIL and VITE_RIDER_ID_4_PASSWORD
+ * - VITE_RIDER_ID_5_EMAIL and VITE_RIDER_ID_5_PASSWORD
+ * - VITE_RIDER_ID_6_EMAIL and VITE_RIDER_ID_6_PASSWORD
+ */
+function getRiderCredentials(riderId) {
+  const id = String(riderId || '4');
+  const email = import.meta.env[`VITE_RIDER_ID_${id}_EMAIL`];
+  const password = import.meta.env[`VITE_RIDER_ID_${id}_PASSWORD`];
+  
+  if (!email || !password) {
+    console.warn(`Rider credentials not found in environment for ID ${id}. Set VITE_RIDER_ID_${id}_EMAIL and VITE_RIDER_ID_${id}_PASSWORD in .env.local`);
+  }
+  
+  return { email: email || '', password: password || '' };
+}
 
 async function getRiderAuthToken(riderId) {
   const key = String(riderId || '4');
   if (riderTokens[key]) return riderTokens[key];
 
-  const creds = RIDER_CREDENTIALS[key] || { email: 'brian@rider.co.ke', password: 'Password123!' };
+  const creds = getRiderCredentials(riderId);
   try {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
@@ -152,8 +162,24 @@ export async function verifyAndCompleteDelivery(deliveryId, verificationCode, pr
     body: JSON.stringify({ qrToken: verificationCode }),
   });
 
-  if (!verifyRes.ok && verifyRes.status !== 400) {
-    // Attempt fallback with raw code
+  // Handle verification response
+  if (!verifyRes.ok) {
+    if (verifyRes.status === 400) {
+      // Invalid code - user entered wrong code
+      const errData = await verifyRes.json().catch(() => ({}));
+      throw new Error(errData.message || 'Invalid verification code. Please try again.');
+    } else if (verifyRes.status === 409) {
+      // Conflict - delivery already completed or reassigned
+      const errData = await verifyRes.json().catch(() => ({}));
+      throw new Error(errData.message || 'Delivery status has changed. Please refresh and try again.');
+    } else if (verifyRes.status >= 500) {
+      // Server error - temporary unavailability
+      throw new Error('Verification service temporarily unavailable. Please try again in a few moments.');
+    } else {
+      // Other errors
+      const errData = await verifyRes.json().catch(() => ({}));
+      throw new Error(errData.message || `Verification failed with error ${verifyRes.status}`);
+    }
   }
 
   // 2. Upload Proof of Delivery (multipart/form-data)

@@ -129,19 +129,34 @@ export default function App() {
     const key = specificRiderId ? `rider_${specificRiderId}` : role;
     if (tokenCache.current[key]) return tokenCache.current[key];
 
-    let email = 'omondi@reflex.co.ke';
-    if (role === 'retailer') email = 'kamau@electronics.co.ke';
-    else if (role === 'rider') {
-      if (specificRiderId === '5') email = 'grace@rider.co.ke';
-      else if (specificRiderId === '6') email = 'james@rider.co.ke';
-      else email = 'brian@rider.co.ke';
+    let email = import.meta.env.VITE_DISPATCHER_EMAIL || 'omondi@reflex.co.ke';
+    let password = import.meta.env.VITE_DISPATCHER_PASSWORD || '';
+    
+    if (role === 'retailer') {
+      email = import.meta.env.VITE_RETAILER_EMAIL || 'kamau@electronics.co.ke';
+      password = import.meta.env.VITE_RETAILER_PASSWORD || '';
+    } else if (role === 'rider') {
+      if (specificRiderId === '5') {
+        email = import.meta.env.VITE_RIDER_ID_5_EMAIL || 'grace@rider.co.ke';
+        password = import.meta.env.VITE_RIDER_ID_5_PASSWORD || '';
+      } else if (specificRiderId === '6') {
+        email = import.meta.env.VITE_RIDER_ID_6_EMAIL || 'james@rider.co.ke';
+        password = import.meta.env.VITE_RIDER_ID_6_PASSWORD || '';
+      } else {
+        email = import.meta.env.VITE_RIDER_ID_4_EMAIL || 'brian@rider.co.ke';
+        password = import.meta.env.VITE_RIDER_ID_4_PASSWORD || '';
+      }
+    }
+
+    if (!password) {
+      console.warn(`Password not configured in .env.local for role '${role}'. Add VITE_${role.toUpperCase()}_PASSWORD`);
     }
 
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: 'Password123!' })
+        body: JSON.stringify({ email, password })
       });
       const data = await res.json();
       if (data.success && data.data?.token) {

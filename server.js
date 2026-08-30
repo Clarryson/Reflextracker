@@ -14,12 +14,40 @@ const RAILWAY_API = process.env.RAILWAY_API || 'https://backend-production-7f0d0
 
 let cachedToken = null;
 
-async function getRailwayToken(email = 'omondi@reflex.co.ke') {
+async function getRailwayToken(role = 'dispatcher', riderId = null) {
+  const tokenKey = riderId ? `rider_${riderId}` : role;
+  
+  // Build email and password from environment or defaults
+  let email, password;
+  
+  if (role === 'dispatcher') {
+    email = process.env.DISPATCHER_EMAIL || 'omondi@reflex.co.ke';
+    password = process.env.DISPATCHER_PASSWORD || '';
+  } else if (role === 'retailer') {
+    email = process.env.RETAILER_EMAIL || 'kamau@electronics.co.ke';
+    password = process.env.RETAILER_PASSWORD || '';
+  } else if (role === 'rider') {
+    if (riderId === 5) {
+      email = process.env.RIDER_EMAIL_GRACE || 'grace@rider.co.ke';
+      password = process.env.RIDER_PASSWORD_GRACE || '';
+    } else if (riderId === 6) {
+      email = process.env.RIDER_EMAIL_JAMES || 'james@rider.co.ke';
+      password = process.env.RIDER_PASSWORD_JAMES || '';
+    } else {
+      email = process.env.RIDER_EMAIL_BRIAN || 'brian@rider.co.ke';
+      password = process.env.RIDER_PASSWORD_BRIAN || '';
+    }
+  }
+  
+  if (!password) {
+    console.warn(`Warning: No password configured for ${role}. Set ${role.toUpperCase()}_PASSWORD in environment.`);
+  }
+  
   try {
     const res = await fetch(`${RAILWAY_API}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: 'Password123!' })
+      body: JSON.stringify({ email, password })
     });
     const data = await res.json();
     if (data.success && data.data?.token) {
@@ -65,7 +93,7 @@ io.on('connection', async (socket) => {
   // Forward new delivery request to Railway
   socket.on('create_delivery', async (data) => {
     try {
-      const retailerToken = await getRailwayToken('kamau@electronics.co.ke');
+      const retailerToken = await getRailwayToken('retailer');
       const res = await fetch(`${RAILWAY_API}/deliveries`, {
         method: 'POST',
         headers: {
@@ -91,7 +119,7 @@ io.on('connection', async (socket) => {
   // Forward rider assignment to Railway
   socket.on('assign_rider', async (data) => {
     try {
-      const dispatcherToken = await getRailwayToken('omondi@reflex.co.ke');
+      const dispatcherToken = await getRailwayToken('dispatcher');
       let riderId = data.riderId;
       if (!riderId && data.rider) {
         if (data.rider.includes('Brian')) riderId = 4;

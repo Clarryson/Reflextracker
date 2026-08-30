@@ -1,16 +1,110 @@
-import React from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 export default function QRScannerModal({ isOpen, onClose, onCodeVerified, expectedCode, deliveryId }) {
-  if (!isOpen) return null;
+  const [scannerState, setScannerState] = useState('ready'); // 'ready', 'scanning', 'verified', 'mismatch', 'error'
+  const [scannedCode, setScannedCode] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const qrReaderRef = useRef(null);
+  const html5QrcodeRef = useRef(null);
+  const cameraPermissionRef = useRef(null);
 
-  const verifyUrl = `https://backend-production-7f0d0.up.railway.app/verify.html?id=${deliveryId || ''}&token=${encodeURIComponent(expectedCode || '')}`;
+  useEffect(() => {
+    if (!isOpen || !qrReaderRef.current) return;
 
-  const handleDirectValidate = () => {
-    if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
-    onCodeVerified(expectedCode || 'VERIFIED-QR');
-    onClose();
+    let scanner;
+    const initScanner = async () => {
+      try {
+        scanner = new Html5Qrcode('qr-reader', {
+          formatsToSupport: [Html5Qrcode.SCAN_TYPE_CAMERA],
+          disableFlip: false,
+          videoConstraints: {
+            facingMode: { ideal: 'environment' },
+          },
+        });
+
+        html5QrcodeRef.current = scanner;
+        setScannerState('scanning');
+
+        const cameraId = (await Html5Qrcode.getCameras())[0]?.id;
+
+        if (cameraId) {
+          await scanner.start(
+            cameraId,
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            (decodedText) => {
+              // QR code scanned
+              setScannedCode(decodedText);
+
+              // Check if it matches expected code
+              if (
+                decodedText === expectedCode ||
+                decodedText.includes(expectedCode) ||
+                decodedText.toUpperCase().includes(expectedCode?.toUpperCase?.())
+              ) {
+                setScannerState('verified');
+                if ('vibrate' in navigator) {
+                  navigator.vibrate([100, 50, 100]);
+                }
+                // Auto-verify after 1.5 seconds
+                setTimeout(() => {
+                  onCodeVerified(decodedText);
+                  onClose();
+                }, 1500);
+              } else {
+                setScannerState('mismatch');
+                setErrorMsg(`Scanned: ${decodedText}\nExpected: ${expectedCode}`);
+                // Reset after 3 seconds
+                setTimeout(() => {
+                  setScannerState('scanning');
+                  setScannedCode(null);
+                }, 3000);
+              }
+            },
+            (error) => {
+              // Ignore scanning errors (constant scanning)
+            }
+          );
+        } else {
+          throw new Error('No camera found on this device');
+        }
+      } catch (error) {
+        setScannerState('error');
+        setErrorMsg(error.message || 'Failed to initialize camera');
+        console.error('QR Scanner init error:', error);
+      }
+    };
+
+    initScanner();
+
+    return () => {
+      if (html5QrcodeRef.current) {
+        html5QrcodeRef.current
+          .stop()
+          .then(() => {
+            html5QrcodeRef.current = null;
+          })
+          .catch(() => {
+            html5QrcodeRef.current = null;
+          });
+      }
+    };
+  }, [isOpen, expectedCode, onCodeVerified, onClose]);
+
+  const handleManualVerify = () => {
+    if (scannedCode) {
+      onCodeVerified(scannedCode);
+      onClose();
+    }
   };
+
+  const handleRetry = () => {
+    setScannerState('scanning');
+    setScannedCode(null);
+    setErrorMsg('');
+  };
+
+  if (!isOpen) return null;
 
   return (
     <div style={styles.overlay} onClick={onClose}>
@@ -19,45 +113,63 @@ export default function QRScannerModal({ isOpen, onClose, onCodeVerified, expect
 
         <div style={styles.header}>
           <div>
-            <span style={styles.subtag}>SECURITY VERIFICATION BARCODE</span>
-            <h3 style={styles.title}>📱 Customer Waybill QR Barcode</h3>
+            <span style={styles.subtag}>QR CODE VERIFICATION</span>
+            <h3 style={styles.title}>📱 Scan Delivery QR Code</h3>
           </div>
           <button onClick={onClose} style={styles.closeBtn}>✕</button>
         </div>
 
-        <div style={styles.qrDisplaySection}>
-          {/* High Contrast Clean Scannable SVG Barcode QR */}
-          <div style={styles.qrWhiteBox}>
-            <QRCodeSVG
-              value={verifyUrl}
-              size={200}
-              level="H"
-              includeMargin={false}
-            />
-          </div>
-
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 'bold', color: '#ffffff' }}>
-              Point any mobile phone camera to scan
-            </p>
-            <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-              Redirects to browser verification page &amp; validates live on Railway DB.
-            </span>
-          </div>
-
-          <a
-            href={verifyUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={styles.directLinkBtn}
-          >
-            🔗 Open Verification URL Directly ↗
-          </a>
-
-          <button onClick={handleDirectValidate} style={styles.confirmScannedBtn}>
-            ✓ 1-Tap Validate Token on Railway
-          </button>
+        <div style={styles.scannerSection}>
+          {scannerState === 'error' ? (
+            <div style={styles.errorBox}>
+              <span style={styles.errorIcon}>⚠️</span>
+              <p style={styles.errorText}>{errorMsg}</p>
+              <button onClick={handleRetry} style={styles.retryBtn}>
+                🔄 Retry Camera
+              </button>
+              <p style={styles.fallbackHint}>Or manually enter the verification code:</p>
+              <input
+                type="text"
+                placeholder={expectedCode}
+                disabled
+                style={styles.codeDisplay}
+              />
+              <button onClick={() => onCodeVerified(expectedCode)} style={styles.confirmBtn}>
+                ✓ Use Manual Code
+              </button>
+            </div>
+          ) : scannerState === 'verified' ? (
+            <div style={styles.successBox}>
+              <span style={styles.successIcon}>✅</span>
+              <p style={styles.successText}>QR Code Verified!</p>
+              <p style={styles.scannedCodeText}>{scannedCode}</p>
+            </div>
+          ) : scannerState === 'mismatch' ? (
+            <div style={styles.mismatchBox}>
+              <span style={styles.mismatchIcon}>❌</span>
+              <p style={styles.mismatchText}>Invalid QR Code</p>
+              <p style={styles.mismatchDetail}>{errorMsg}</p>
+              <button onClick={handleRetry} style={styles.retryBtn}>
+                🔄 Try Again
+              </button>
+            </div>
+          ) : (
+            <div id="qr-reader" ref={qrReaderRef} style={styles.qrScannerBox} />
+          )}
         </div>
+
+        {scannerState === 'scanning' && (
+          <div style={styles.instructions}>
+            <p>📍 Point camera at QR code on delivery waybill</p>
+            <p style={styles.smallText}>Make sure QR code is well-lit and centered</p>
+          </div>
+        )}
+
+        {scannerState === 'verified' && (
+          <div style={styles.verifiedFooter}>
+            <p>Delivery verified and locked for completion</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -67,12 +179,12 @@ const styles = {
   overlay: {
     position: 'fixed',
     inset: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
     display: 'flex',
     alignItems: 'flex-end',
     justifyContent: 'center',
     zIndex: 9999,
-    backdropFilter: 'blur(6px)',
+    backdropFilter: 'blur(8px)',
   },
   sheet: {
     backgroundColor: '#1e293b',
@@ -84,14 +196,13 @@ const styles = {
     boxSizing: 'border-box',
     color: '#f8fafc',
     borderTop: '1px solid #334155',
-    boxShadow: '0 -10px 30px rgba(0,0,0,0.6)',
+    boxShadow: '0 -10px 40px rgba(0,0,0,0.8)',
   },
   dragBar: {
     width: '44px',
     height: '5px',
     backgroundColor: '#475569',
     borderRadius: '10px',
-    alignSelf: 'center',
     margin: '0 auto 12px auto',
   },
   header: {
@@ -103,31 +214,24 @@ const styles = {
   subtag: { fontSize: '10px', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '0.8px' },
   title: { margin: '2px 0 0 0', fontSize: '18px', fontWeight: '800', color: '#ffffff' },
   closeBtn: { background: 'none', border: 'none', color: '#94a3b8', fontSize: '20px', cursor: 'pointer' },
-  qrDisplaySection: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', padding: '6px 0' },
-  qrWhiteBox: { backgroundColor: '#ffffff', padding: '16px', borderRadius: '18px', boxShadow: '0 8px 30px rgba(0,0,0,0.5)' },
-  directLinkBtn: {
-    width: '100%',
-    backgroundColor: '#0f172a',
-    color: '#38bdf8',
-    padding: '12px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: 'bold',
-    textAlign: 'center',
-    textDecoration: 'none',
-    border: '1px solid #0284c7',
-    boxSizing: 'border-box',
-  },
-  confirmScannedBtn: {
-    width: '100%',
-    backgroundColor: '#16a34a',
-    color: '#ffffff',
-    border: 'none',
-    padding: '14px',
-    borderRadius: '12px',
-    fontSize: '14px',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)',
-  },
+  scannerSection: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '6px 0', minHeight: '240px' },
+  qrScannerBox: { width: '100%', height: '240px', borderRadius: '12px', overflow: 'hidden', border: '2px solid #0284c7' },
+  errorBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '16px', backgroundColor: '#7f1d1d', borderRadius: '12px', width: '100%' },
+  errorIcon: { fontSize: '40px' },
+  errorText: { margin: 0, fontSize: '14px', textAlign: 'center', color: '#fecaca' },
+  successBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '20px', backgroundColor: '#166534', borderRadius: '12px', width: '100%' },
+  successIcon: { fontSize: '48px' },
+  successText: { margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#bbf7d0' },
+  scannedCodeText: { margin: '4px 0 0 0', fontSize: '12px', color: '#a7f3d0', fontFamily: 'monospace' },
+  mismatchBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px', backgroundColor: '#92400e', borderRadius: '12px', width: '100%' },
+  mismatchIcon: { fontSize: '40px' },
+  mismatchText: { margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#fed7aa' },
+  mismatchDetail: { margin: '4px 0 0 0', fontSize: '11px', color: '#f5dab1', fontFamily: 'monospace' },
+  instructions: { textAlign: 'center', fontSize: '12px', color: '#cbd5e1' },
+  smallText: { margin: '4px 0 0 0', fontSize: '11px', color: '#94a3b8' },
+  verifiedFooter: { textAlign: 'center', padding: '12px', backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', borderTop: '1px solid #22c55e' },
+  retryBtn: { backgroundColor: '#0284c7', color: '#ffffff', border: 'none', padding: '10px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', width: '100%' },
+  fallbackHint: { margin: '8px 0 4px 0', fontSize: '12px', color: '#cbd5e1' },
+  codeDisplay: { width: '100%', padding: '8px', fontSize: '13px', fontFamily: 'monospace', backgroundColor: '#0f172a', color: '#38bdf8', border: '1px solid #0284c7', borderRadius: '6px', boxSizing: 'border-box' },
+  confirmBtn: { width: '100%', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' },
 };
