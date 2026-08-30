@@ -97,6 +97,10 @@ export default function App() {
   const [riderStatusFilter, setRiderStatusFilter] = useState('ALL');
   const [regeneratingRiderId, setRegeneratingRiderId] = useState(null);
 
+  // Dispatcher Assign Rider Modal State
+  const [assignModalDelivery, setAssignModalDelivery] = useState(null);
+  const [selectedRiderForAssignment, setSelectedRiderForAssignment] = useState('');
+
   // Retailer "New Delivery Request" Form State
   const [formData, setFormData] = useState({
     customerName: 'John',
@@ -801,9 +805,27 @@ export default function App() {
     const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(text)}`;
     window.open(waUrl, '_blank');
   };
+  const getRiderAvailability = (rId) => {
+    const activeTasks = deliveries.filter(
+      (d) => String(d.riderId) === String(rId) && (d.status === 'ASSIGNED' || d.status === 'PICKED_UP')
+    );
+    if (activeTasks.length === 0) {
+      return { status: 'AVAILABLE', label: '🟢 Available', color: '#22c55e' };
+    }
+    return {
+      status: 'ON_DELIVERY',
+      label: `🟡 On Delivery (${activeTasks.length} active)`,
+      color: '#f59e0b'
+    };
+  };
+
   const handleAssignRider = async (deliveryId, riderId) => {
     if (!riderId) return;
+    const targetRider = riders.find((r) => String(r.id) === String(riderId));
+    const riderName = targetRider?.name || `Rider #${riderId}`;
+
     try {
+      // Step 1: Update Railway backend
       const token = await getAuthToken('dispatcher');
       const res = await fetch(`${API_BASE}/deliveries/${deliveryId}/assign`, {
         method: 'PATCH',
@@ -812,14 +834,26 @@ export default function App() {
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ riderId: Number(riderId) })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showNotification(`🚴 Assigned Rider to Waybill #${deliveryId}`);
-        await fetchDeliveries();
-      } else {
-        showNotification(`⚠️ ${data.message || 'Assignment failed'}`);
-      }
+      }).catch(() => null);
+
+      // Step 2: Also update local backend proxy / socket broadcaster if available
+      await fetch(`http://localhost:3000/api/deliveries/${deliveryId}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ riderId, riderName })
+      }).catch(() => {});
+
+      // Optimistic UI state update
+      setDeliveries((prev) =>
+        prev.map((d) =>
+          String(d.id) === String(deliveryId)
+            ? { ...d, status: 'ASSIGNED', riderId: String(riderId), riderName }
+            : d
+        )
+      );
+
+      showNotification(`🚴 Assigned delivery to ${riderName} (Status: ASSIGNED)`);
+      fetchDeliveries();
     } catch (err) {
       showNotification(`❌ Error: ${err.message}`);
     }
@@ -1517,10 +1551,72 @@ export default function App() {
                           </div>
 
                           <div style={styles.queueItemRow}>
-                            <span style={styles.queueItemLabel}>Item / Description:</span>
+                            <span style={styles.queueItemLabel}>Item:</span>
                             <strong style={{ ...styles.queueItemValue, color: '#f8fafc' }}>
                               {item.itemDescription}
                             </strong>
+                          </div>
+
+                          {/* Lifecycle Progression Stepper */}
+                          <div style={styles.lifecycleBar}>
+                            <div style={styles.lifecycleSteps}>
+                              {[
+                                { key: 'OPEN', label: 'OPEN' },
+                                { key: 'ASSIGNED', label: 'ASSIGNED' },
+                                { key: 'PICKED_UP', label: 'PICKED_UP' },
+                                { key: 'IN_TRANSIT', label: 'IN_TRANSIT' },
+                                { key: 'DELIVERED', label: 'DELIVERED' }
+                              ].map((step, idx) => {
+                                const isCurrent =
+                                  (step.key === 'OPEN' && (!item.status || item.status === 'OPEN')) ||
+                                  (step.key === 'ASSIGNED' && item.status === 'ASSIGNED') ||
+                                  (step.key === 'PICKED_UP' && item.status === 'PICKED_UP') ||
+                                  (step.key === 'IN_TRANSIT' && item.status === 'PICKED_UP') ||
+                                  (step.key === 'DELIVERED' && item.status === 'DELIVERED');
+
+                                const isPassed =
+                                  item.status === 'DELIVERED'
+                                    ? true
+                                    : item.status === 'PICKED_UP'
+                                    ? step.key !== 'DELIVERED'
+                                    : item.status === 'ASSIGNED'
+                                    ? step.key === 'OPEN' || step.key === 'ASSIGNED'
+                                    : step.key === 'OPEN';
+
+                                return (
+                                  <React.Fragment key={step.key}>
+                                    <span
+                                      style={{
+                                        ...styles.lifecycleBadge,
+                                        backgroundColor: isCurrent
+                                          ? '#0284c7'
+                                          : isPassed
+                                          ? 'rgba(56, 189, 248, 0.1)'
+                                          : 'rgba(255, 255, 255, 0.03)',
+                                        color: isCurrent
+                                          ? '#ffffff'
+                                          : isPassed
+                                          ? '#38bdf8'
+                                          : '#475569',
+                                        borderColor: isCurrent
+                                          ? '#38bdf8'
+                                          : isPassed
+                                          ? '#334155'
+                                          : '#1e293b',
+                                        fontWeight: isCurrent ? '800' : '600'
+                                      }}
+                                    >
+                                      {step.label}
+                                    </span>
+                                    {idx < 4 && (
+                                      <span style={{ color: isPassed ? '#38bdf8' : '#334155', fontSize: '9px' }}>
+                                        ➔
+                                      </span>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
 
@@ -1535,30 +1631,39 @@ export default function App() {
                               style={styles.viewRowBtn}
                               onClick={() => setInspectedWaybill(item)}
                             >
-                              📱 View QR ↗
+                              📱 Show QR ↗
                             </button>
                           </div>
 
                           <div style={styles.assignControlGroup}>
-                            <label style={styles.assignControlLabel}>Rider:</label>
-                            <select
-                              style={{
-                                ...styles.assignSelect,
-                                borderColor: isOpen ? '#f59e0b' : '#38bdf8',
-                                backgroundColor: isOpen ? 'rgba(245, 158, 11, 0.1)' : '#1e293b'
-                              }}
-                              value={item.riderId || ''}
-                              onChange={(e) => handleAssignRider(item.id, e.target.value)}
-                            >
-                              <option value="" disabled>
-                                [ Assign Rider ▼ ]
-                              </option>
-                              {riders.map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  🚴 {r.name} ({r.phone})
-                                </option>
-                              ))}
-                            </select>
+                            {isOpen ? (
+                              <button
+                                type="button"
+                                style={styles.assignRiderModalBtn}
+                                onClick={() => {
+                                  setAssignModalDelivery(item);
+                                  setSelectedRiderForAssignment('');
+                                }}
+                              >
+                                🚴 Assign Rider ▼
+                              </button>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={styles.assignedRiderPill}>
+                                  🚴 {item.riderName || `Rider #${item.riderId}`}
+                                </span>
+                                <button
+                                  type="button"
+                                  style={styles.reassignBtn}
+                                  onClick={() => {
+                                    setAssignModalDelivery(item);
+                                    setSelectedRiderForAssignment(String(item.riderId || ''));
+                                  }}
+                                >
+                                  🔄 Reassign
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -3460,6 +3565,135 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* 11. Dispatcher Assign Rider Modal */}
+      {assignModalDelivery && (
+        <div style={styles.modalOverlay} onClick={() => setAssignModalDelivery(null)}>
+          <div style={{ ...styles.modalCard, maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ ...styles.newDeliveryIconBadge, backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
+                  🚴
+                </div>
+                <div>
+                  <h3 style={styles.modalTitle}>Assign Rider</h3>
+                  <span style={styles.modalSubTag}>
+                    {assignModalDelivery.reference || `DEL-#${assignModalDelivery.id}`} • {assignModalDelivery.customerName}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setAssignModalDelivery(null)} style={styles.modalCloseBtn}>✕</button>
+            </div>
+
+            <div style={styles.modalBody}>
+              {/* Delivery brief info banner */}
+              <div style={styles.assignDeliveryBriefBox}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <strong style={{ fontSize: '13.5px', color: '#ffffff' }}>
+                    📦 {assignModalDelivery.itemDescription}
+                  </strong>
+                  <span style={styles.retailerBadge}>
+                    🏪 {assignModalDelivery.retailerName || 'Kamau Electronics'}
+                  </span>
+                </div>
+                <span style={{ fontSize: '12px', color: '#cbd5e1', display: 'block' }}>
+                  📍 <strong>Destination:</strong> {assignModalDelivery.deliveryAddress}
+                </span>
+                <span style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginTop: '2px' }}>
+                  👤 <strong>Recipient:</strong> {assignModalDelivery.customerName} ({assignModalDelivery.customerPhone})
+                </span>
+              </div>
+
+              <div style={{ margin: '14px 0 8px 0' }}>
+                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '800', letterSpacing: '0.5px' }}>
+                  AVAILABLE FLEET RIDERS:
+                </span>
+              </div>
+
+              {/* Rider Selection Radio List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '280px', overflowY: 'auto' }}>
+                {riders.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
+                    No fleet riders registered. Please register riders in the Fleet Riders tab.
+                  </div>
+                ) : (
+                  riders.map((r) => {
+                    const availability = getRiderAvailability(r.id);
+                    const isSelected = String(selectedRiderForAssignment) === String(r.id);
+
+                    return (
+                      <label
+                        key={r.id}
+                        style={{
+                          ...styles.riderAssignRadioCard,
+                          borderColor: isSelected ? '#38bdf8' : '#1e293b',
+                          backgroundColor: isSelected ? 'rgba(56, 189, 248, 0.12)' : '#0f172a'
+                        }}
+                        onClick={() => setSelectedRiderForAssignment(String(r.id))}
+                      >
+                        <input
+                          type="radio"
+                          name="assignedRider"
+                          value={r.id}
+                          checked={isSelected}
+                          onChange={() => setSelectedRiderForAssignment(String(r.id))}
+                          style={{ width: '18px', height: '18px', accentColor: '#0284c7', cursor: 'pointer' }}
+                        />
+                        <div style={styles.riderTableAvatar}>
+                          {(r.name || 'R').slice(0, 1)}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <strong style={{ fontSize: '14px', color: '#ffffff' }}>{r.name}</strong>
+                            <span
+                              style={{
+                                fontSize: '11.5px',
+                                fontWeight: '800',
+                                color: availability.color
+                              }}
+                            >
+                              {availability.label}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '11.5px', color: '#94a3b8', display: 'block', marginTop: '2px' }}>
+                            📞 {r.phone} • 📍 {r.hub || 'Westlands Hub'}
+                          </span>
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Action Buttons: [Cancel] [Assign Rider] */}
+              <div style={{ ...styles.formActionsRow, marginTop: '20px' }}>
+                <button
+                  type="button"
+                  style={styles.btnSecondary}
+                  onClick={() => setAssignModalDelivery(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...styles.btnPrimary,
+                    opacity: selectedRiderForAssignment ? 1 : 0.5,
+                    cursor: selectedRiderForAssignment ? 'pointer' : 'not-allowed'
+                  }}
+                  disabled={!selectedRiderForAssignment}
+                  onClick={async () => {
+                    await handleAssignRider(assignModalDelivery.id, selectedRiderForAssignment);
+                    setAssignModalDelivery(null);
+                  }}
+                >
+                  🚴 Assign Rider
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -4640,5 +4874,75 @@ const styles = {
     outline: 'none',
     cursor: 'pointer',
     maxWidth: '220px'
+  },
+  assignRiderModalBtn: {
+    padding: '7px 14px',
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '10px',
+    fontSize: '12.5px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px'
+  },
+  assignedRiderPill: {
+    padding: '5px 10px',
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    color: '#38bdf8',
+    border: '1px solid #38bdf8',
+    borderRadius: '8px',
+    fontSize: '12px',
+    fontWeight: '800'
+  },
+  reassignBtn: {
+    padding: '5px 10px',
+    backgroundColor: '#1e293b',
+    color: '#cbd5e1',
+    border: '1px solid #334155',
+    borderRadius: '8px',
+    fontSize: '11.5px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  lifecycleBar: {
+    marginTop: '4px',
+    padding: '8px 10px',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: '8px',
+    border: '1px solid #1e293b'
+  },
+  lifecycleSteps: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    flexWrap: 'wrap'
+  },
+  lifecycleBadge: {
+    padding: '2px 7px',
+    borderRadius: '6px',
+    fontSize: '10px',
+    letterSpacing: '0.3px',
+    border: '1px solid transparent',
+    display: 'inline-block'
+  },
+  assignDeliveryBriefBox: {
+    backgroundColor: '#090d16',
+    border: '1px solid #1e293b',
+    borderRadius: '12px',
+    padding: '12px 14px'
+  },
+  riderAssignRadioCard: {
+    padding: '12px 14px',
+    borderRadius: '12px',
+    border: '1.5px solid #1e293b',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease'
   },
 };

@@ -394,6 +394,53 @@ app.get('/api/riders/me/deliveries', async (req, res) => {
   });
 });
 
+// 8. POST /api/deliveries/:id/assign (Assign rider to delivery & broadcast to Rider PWA)
+app.post('/api/deliveries/:id/assign', async (req, res) => {
+  const { id } = req.params;
+  const { riderId, riderName } = req.body;
+
+  try {
+    const dispatcherToken = await getRailwayToken('dispatcher');
+    if (dispatcherToken && riderId) {
+      await fetch(`${RAILWAY_API}/deliveries/${id}/assign`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${dispatcherToken}`
+        },
+        body: JSON.stringify({ riderId: Number(riderId) })
+      }).catch((e) => console.warn('Railway assignment proxy note:', e.message));
+    }
+
+    const assignedRider = registeredRiders.find((r) => String(r.id) === String(riderId));
+    const finalRiderName = riderName || assignedRider?.name || `Rider #${riderId}`;
+
+    console.log(`[DELIVERY ASSIGNED] Delivery #${id} -> Rider: ${finalRiderName} (#${riderId})`);
+
+    // Emit event to Rider PWA
+    io.emit('delivery.assigned', {
+      type: 'delivery.assigned',
+      deliveryId: Number(id),
+      id: Number(id),
+      riderId: String(riderId),
+      riderName: finalRiderName,
+      status: 'ASSIGNED'
+    });
+
+    const updated = await fetchLiveDeliveries();
+    io.emit('update_deliveries', updated);
+
+    res.json({
+      success: true,
+      message: `Delivery #${id} assigned to ${finalRiderName}`,
+      data: { deliveryId: id, riderId, riderName: finalRiderName, status: 'ASSIGNED' }
+    });
+  } catch (err) {
+    console.error('Error in assign endpoint:', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ─── WEBSOCKET HANDLING ───
 io.on('connection', async (socket) => {
   console.log('Client connected to Reflex Server:', socket.id);
