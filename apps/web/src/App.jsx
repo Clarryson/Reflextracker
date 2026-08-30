@@ -54,22 +54,48 @@ export default function App() {
   const verifyIdParam = urlParams.get('id') || urlParams.get('deliveryId');
   const verifyTokenParam = urlParams.get('token');
 
+  // ─── 0b. Check URL for Rider PWA Onboarding (/join/:token or ?join=token) ───
+  const pathParts = window.location.pathname.split('/');
+  const isJoinPath = pathParts[1] === 'join' && pathParts[2];
+  const joinTokenParam = isJoinPath ? pathParts[2] : (urlParams.get('join') || urlParams.get('onboarding') || urlParams.get('token'));
+
+  const [isOnboardingMode, setIsOnboardingMode] = useState(Boolean(isJoinPath || urlParams.get('join') || urlParams.get('onboarding')));
+  const [onboardingToken, setOnboardingToken] = useState(joinTokenParam || '');
+  const [onboardingStatus, setOnboardingStatus] = useState('loading'); // 'loading', 'valid', 'invalid'
+  const [onboardingRider, setOnboardingRider] = useState(null);
+  const [onboardingErrorMsg, setOnboardingErrorMsg] = useState('');
+
   const [isUrlVerifyMode, setIsUrlVerifyMode] = useState(Boolean(verifyParam && verifyIdParam));
   const [urlVerifyStatus, setUrlVerifyStatus] = useState('idle'); // 'idle', 'verifying', 'success', 'error'
   const [urlVerifyMsg, setUrlVerifyMsg] = useState('');
   const [urlDeliveryData, setUrlDeliveryData] = useState(null);
 
   // Navigation & Role Tabs
-  const [activeTab, setActiveTab] = useState('retailer'); // 'retailer', 'dispatcher', 'rider'
+  const [activeTab, setActiveTab] = useState('retailer'); // 'retailer', 'dispatcher', 'riders', 'rider'
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Live Data State (Railway Backend + MySQL)
+  // Live Data State (Railway Backend + MySQL + Express Proxy)
   const [deliveries, setDeliveries] = useState([]);
   const [riders, setRiders] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
+
+  // Fleet Riders Management State
+  const [isRegisterRiderModalOpen, setIsRegisterRiderModalOpen] = useState(false);
+  const [registeredRiderSuccess, setRegisteredRiderSuccess] = useState(null);
+  const [riderFormData, setRiderFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    hub: 'Westlands Hub'
+  });
+  const [riderFormErrors, setRiderFormErrors] = useState({});
+  const [isSubmittingRider, setIsSubmittingRider] = useState(false);
+  const [riderSearchTerm, setRiderSearchTerm] = useState('');
+  const [riderStatusFilter, setRiderStatusFilter] = useState('ALL');
+  const [regeneratingRiderId, setRegeneratingRiderId] = useState(null);
 
   // Retailer "New Delivery Request" Form State
   const [formData, setFormData] = useState({
@@ -270,17 +296,74 @@ export default function App() {
   const fetchRiders = useCallback(async () => {
     try {
       const token = await getAuthToken('dispatcher');
-      const res = await fetch(`${API_BASE}/riders`, {
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-      });
-      if (res.ok) {
+      // Fetch from local Express proxy or Railway API
+      let res = await fetch('http://localhost:3000/api/riders').catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetch(`${API_BASE}/riders`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        }).catch(() => null);
+      }
+      if (res && res.ok) {
         const data = await res.json();
-        setRiders(data.data?.riders || []);
+        if (data.data?.riders) {
+          setRiders(data.data.riders);
+        }
       }
     } catch (err) {
-      console.warn('Error fetching riders from Railway:', err.message);
+      console.warn('Error fetching riders:', err.message);
     }
   }, [getAuthToken]);
+
+  // ─── Check & Validate Rider Onboarding Token (/join/:token) ───
+  useEffect(() => {
+    if (!isOnboardingMode || !onboardingToken) return;
+
+    let isMounted = true;
+    (async () => {
+      setOnboardingStatus('loading');
+      try {
+        let res = await fetch(`http://localhost:3000/api/rider/onboarding/${onboardingToken}`).catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetch(`${API_BASE}/rider/onboarding/${onboardingToken}`).catch(() => null);
+        }
+        
+        if (res && res.ok) {
+          const data = await res.json();
+          if (isMounted && data.success && data.data?.rider) {
+            setOnboardingRider(data.data.rider);
+            setOnboardingStatus('valid');
+            return;
+          }
+        }
+
+        // Local fallback seeds if offline
+        if (isMounted) {
+          if (onboardingToken.includes('brian') || onboardingToken === '7f82a91c4e91b00401brian04') {
+            setOnboardingRider({ id: '4', code: 'RIDER-004', name: 'Brian Mutua', phone: '+254712345678', email: 'brian@rider.co.ke', hub: 'Westlands Hub' });
+            setOnboardingStatus('valid');
+          } else if (onboardingToken.includes('grace') || onboardingToken === '8e93b02d5f02c00502grace05') {
+            setOnboardingRider({ id: '5', code: 'RIDER-005', name: 'Grace Wanjiru', phone: '+254722334455', email: 'grace@rider.co.ke', hub: 'Kilimani Node' });
+            setOnboardingStatus('valid');
+          } else if (onboardingToken.includes('james') || onboardingToken === '9f04c13e6a13d00603james06') {
+            setOnboardingRider({ id: '6', code: 'RIDER-006', name: 'James Otieno', phone: '+254733445566', email: 'james@rider.co.ke', hub: 'CBD Depot' });
+            setOnboardingStatus('valid');
+          } else {
+            setOnboardingStatus('invalid');
+            setOnboardingErrorMsg('Invalid or expired rider invitation token.');
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          setOnboardingStatus('invalid');
+          setOnboardingErrorMsg('Network error validating invitation token.');
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOnboardingMode, onboardingToken]);
 
   // ─── Direct URL QR Verification Handler (when phone camera scans barcode) ───
   const executeUrlVerification = useCallback(async (deliveryId, token) => {
@@ -551,7 +634,173 @@ export default function App() {
     }
   };
 
-  // ─── Dispatcher: Assign Fleet Rider (Railway REST) ───
+  // ─── Retailer / Dispatcher: Register Rider & PWA Link Management ───
+  const handleRegisterRiderSubmit = async (e) => {
+    if (e) e.preventDefault();
+    const errors = {};
+    if (!riderFormData.name || !riderFormData.name.trim()) {
+      errors.name = 'Full name is required';
+    }
+    if (!riderFormData.phone || !riderFormData.phone.trim()) {
+      errors.phone = 'Phone number is required';
+    } else {
+      const p = riderFormData.phone.trim();
+      const phoneRegex = /^(\+?254|0)?[17]\d{8}$/;
+      const digits = p.replace(/\D/g, '');
+      if (!phoneRegex.test(p) && (digits.length < 9 || digits.length > 12)) {
+        errors.phone = 'Enter a valid Kenyan phone number (e.g. +254712345678 or 0712345678)';
+      }
+    }
+    if (riderFormData.email && riderFormData.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(riderFormData.email.trim())) {
+        errors.email = 'Enter a valid email address';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setRiderFormErrors(errors);
+      return;
+    }
+
+    setIsSubmittingRider(true);
+    try {
+      const token = await getAuthToken('dispatcher');
+      let res = await fetch('http://localhost:3000/api/riders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(riderFormData)
+      }).catch(() => null);
+
+      if (!res || !res.ok) {
+        res = await fetch(`${API_BASE}/riders`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(riderFormData)
+        }).catch(() => null);
+      }
+
+      if (res) {
+        const data = await res.json().catch(() => ({}));
+        if (data.success && data.data?.rider) {
+          const created = data.data.rider;
+          const onboardingUrl = data.data.onboardingUrl || `${window.location.origin}/join/${created.onboardingToken}`;
+          setRegisteredRiderSuccess({ rider: created, onboardingUrl });
+          setIsRegisterRiderModalOpen(false);
+          setRiderFormData({ name: '', phone: '', email: '', hub: 'Westlands Hub' });
+          setRiderFormErrors({});
+          showNotification(`✅ Rider ${created.name} registered! PWA access link generated.`);
+          await fetchRiders();
+          return;
+        } else if (data.message) {
+          showNotification(`⚠️ ${data.message}`);
+          return;
+        }
+      }
+
+      // Local fallback creation if completely offline
+      const nextId = String(riders.length + 4);
+      const fallbackToken = 'token_' + Date.now().toString(36);
+      const localRider = {
+        id: nextId,
+        code: `RIDER-${nextId.padStart(3, '0')}`,
+        name: riderFormData.name.trim(),
+        phone: riderFormData.phone.trim(),
+        email: riderFormData.email.trim() || `${riderFormData.name.toLowerCase().replace(/\s+/g, '.')}@rider.reflex.co.ke`,
+        hub: riderFormData.hub || 'Westlands Hub',
+        status: 'ACTIVE',
+        pwaStatus: 'LINK_SENT',
+        onboardingToken: fallbackToken,
+        onboardingUrl: `${window.location.origin}/join/${fallbackToken}`
+      };
+      setRiders(prev => [...prev, localRider]);
+      setRegisteredRiderSuccess({ rider: localRider, onboardingUrl: localRider.onboardingUrl });
+      setIsRegisterRiderModalOpen(false);
+      setRiderFormData({ name: '', phone: '', email: '', hub: 'Westlands Hub' });
+      setRiderFormErrors({});
+      showNotification(`✅ Rider ${localRider.name} registered locally!`);
+    } catch (err) {
+      showNotification(`❌ Error registering rider: ${err.message}`);
+    } finally {
+      setIsSubmittingRider(false);
+    }
+  };
+
+  const handleRegenerateRiderLink = async (riderId) => {
+    setRegeneratingRiderId(riderId);
+    try {
+      const token = await getAuthToken('dispatcher');
+      let res = await fetch(`http://localhost:3000/api/riders/${riderId}/regenerate-link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.success && data.data?.onboardingUrl) {
+          showNotification(`🔄 New PWA access link generated for Rider #${riderId}!`);
+          await fetchRiders();
+          setRegisteredRiderSuccess({
+            rider: data.data.rider,
+            onboardingUrl: data.data.onboardingUrl
+          });
+          return;
+        }
+      }
+
+      // Fallback
+      const target = riders.find(r => String(r.id) === String(riderId));
+      if (target) {
+        const freshToken = 'fresh_' + Date.now().toString(36);
+        const freshUrl = `${window.location.origin}/join/${freshToken}`;
+        const updated = { ...target, onboardingToken: freshToken, onboardingUrl: freshUrl, pwaStatus: 'LINK_SENT' };
+        setRiders(prev => prev.map(r => String(r.id) === String(riderId) ? updated : r));
+        setRegisteredRiderSuccess({ rider: updated, onboardingUrl: freshUrl });
+        showNotification(`🔄 New PWA link generated for ${target.name}!`);
+      }
+    } catch (err) {
+      showNotification(`❌ Error: ${err.message}`);
+    } finally {
+      setRegeneratingRiderId(null);
+    }
+  };
+
+  const handleCopyPwaLink = (url, riderName) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url);
+      showNotification(`📋 Copied PWA link for ${riderName || 'rider'} to clipboard!`);
+    } else {
+      showNotification(`Link: ${url}`);
+    }
+  };
+
+  const handleSharePwaLink = async (url, rider) => {
+    const text = `Hi ${rider.name}, here is your official REFLEX Rider PWA access link. Open and add it to your Home Screen to start receiving delivery dispatches:\n${url}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'REFLEX Rider PWA Access',
+          text,
+          url
+        });
+        showNotification('✓ Shared via system dialog');
+        return;
+      } catch (e) {}
+    }
+    // WhatsApp Fallback
+    const cleanPhone = (rider.phone || '').replace(/\D/g, '');
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank');
+  };
   const handleAssignRider = async (deliveryId, riderId) => {
     if (!riderId) return;
     try {
@@ -700,6 +949,104 @@ export default function App() {
   };
 
 
+
+  // ─── IF OPENED VIA RIDER PWA INVITATION LINK (/join/:token or ?join=token) ───
+  if (isOnboardingMode) {
+    return (
+      <div style={styles.onboardingPageContainer}>
+        <div style={styles.onboardingCard}>
+          <div style={styles.onboardingHeaderGroup}>
+            <div style={styles.onboardingLogoBadge}>⚡</div>
+            <h1 style={styles.onboardingBrandTitle}>REFLEX Rider PWA</h1>
+            <span style={styles.onboardingSubTag}>OFFICIAL COURIER ONBOARDING GATEWAY</span>
+          </div>
+
+          {onboardingStatus === 'loading' && (
+            <div style={styles.onboardingLoadingBox}>
+              <div style={styles.loadingSpinnerMini} />
+              <p style={{ margin: 0, fontSize: '14px', color: '#cbd5e1', fontWeight: '600' }}>
+                Validating your rider invitation token...
+              </p>
+            </div>
+          )}
+
+          {onboardingStatus === 'valid' && onboardingRider && (
+            <div style={styles.onboardingContent}>
+              <div style={styles.welcomeHeroBox}>
+                <div style={styles.welcomeHeroIcon}>👋</div>
+                <h2 style={styles.welcomeHeroTitle}>Welcome to REFLEX!</h2>
+                <p style={styles.welcomeHeroSubtitle}>
+                  Hi <strong>{onboardingRider.name}</strong>, you have been registered as an authorized REFLEX delivery courier.
+                </p>
+              </div>
+
+              {/* Rider Identity Card */}
+              <div style={styles.onboardingRiderCard}>
+                <div style={styles.onboardingAvatar}>
+                  {onboardingRider.name.slice(0, 1)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <code style={styles.onboardingCodeTag}>{onboardingRider.code || `#${onboardingRider.id}`}</code>
+                    <span style={styles.pwaActiveBadge}>✓ PWA ACTIVE</span>
+                  </div>
+                  <strong style={styles.onboardingNameText}>{onboardingRider.name}</strong>
+                  <span style={styles.onboardingMetaText}>📞 {onboardingRider.phone} • 📍 {onboardingRider.hub || 'Westlands Hub'}</span>
+                </div>
+              </div>
+
+              {/* PWA Home Screen Prompt Banner */}
+              <div style={styles.homeScreenPromptCard}>
+                <span style={{ fontSize: '20px' }}>📲</span>
+                <div>
+                  <strong style={{ fontSize: '13px', color: '#ffffff', display: 'block' }}>
+                    Add REFLEX to your Home Screen
+                  </strong>
+                  <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                    Tap your browser menu and select "Add to Home screen" for instant 1-tap dispatch access.
+                  </span>
+                </div>
+              </div>
+
+              {/* Continue Action */}
+              <button
+                style={styles.onboardingContinueBtn}
+                onClick={() => {
+                  setActiveRiderId(String(onboardingRider.id));
+                  setActiveTab('rider');
+                  setIsOnboardingMode(false);
+                  try {
+                    localStorage.setItem('reflex_active_rider', JSON.stringify(onboardingRider));
+                  } catch (e) {}
+                  showNotification(`👋 Welcome ${onboardingRider.name}! You are ready to receive deliveries.`);
+                }}
+              >
+                🚀 Continue to Delivery Console →
+              </button>
+            </div>
+          )}
+
+          {onboardingStatus === 'invalid' && (
+            <div style={styles.onboardingInvalidBox}>
+              <div style={styles.invalidIconCircle}>❌</div>
+              <h2 style={styles.invalidTitle}>Invalid Invitation Link</h2>
+              <p style={styles.invalidMessage}>
+                {onboardingErrorMsg || 'This rider invitation link is invalid or has expired. Please contact your fleet dispatcher for a fresh invite link.'}
+              </p>
+              <button
+                style={styles.onboardingReturnBtn}
+                onClick={() => {
+                  window.location.href = window.location.origin;
+                }}
+              >
+                ← Return to Home
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ─── IF OPENED VIA PHONE CAMERA QR SCAN REDIRECTION ───
   if (isUrlVerifyMode) {
@@ -875,6 +1222,12 @@ export default function App() {
               onClick={() => setActiveTab('dispatcher')}
             >
               🎛️ Dispatcher
+            </button>
+            <button
+              style={{ ...styles.segmentButton, ...(activeTab === 'riders' ? styles.segmentActive : {}) }}
+              onClick={() => setActiveTab('riders')}
+            >
+              👥 Fleet Riders ({riders.length})
             </button>
             <button
               style={{ ...styles.segmentButton, ...(activeTab === 'rider' ? styles.segmentActive : {}) }}
@@ -1676,6 +2029,231 @@ export default function App() {
                         </tr>
                       ))
                     )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 2.5: FLEET RIDERS MANAGEMENT ── */}
+        {activeTab === 'riders' && (
+          <div style={styles.retailerSection}>
+            {/* Top Toolbar */}
+            <div style={styles.hubToolbar}>
+              <div style={styles.hubTitleGroup}>
+                <div style={styles.hubIconBadge}>👥</div>
+                <div>
+                  <h2 style={styles.hubTitle}>Fleet Riders &amp; Couriers</h2>
+                  <span style={styles.hubSubtitle}>
+                    Register delivery riders, generate unique PWA onboarding links, and monitor courier status
+                  </span>
+                </div>
+              </div>
+
+              <div style={styles.hubActions}>
+                <button
+                  style={styles.openNewDeliveryBtn}
+                  onClick={() => {
+                    setRiderFormData({ name: '', phone: '', email: '', hub: 'Westlands Hub' });
+                    setRiderFormErrors({});
+                    setIsRegisterRiderModalOpen(true);
+                  }}
+                >
+                  <span style={{ fontSize: '15px' }}>➕</span> Register New Rider
+                </button>
+              </div>
+            </div>
+
+            {/* Riders Fleet Summary Cards */}
+            <div style={styles.kpiContainer}>
+              <div style={{ ...styles.kpiCard, flex: 1 }}>
+                <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>🏍️</div>
+                <div>
+                  <span style={{ ...styles.kpiValue, color: '#38bdf8' }}>{riders.length}</span>
+                  <span style={styles.kpiLabel}>Total Registered Riders</span>
+                </div>
+              </div>
+
+              <div style={{ ...styles.kpiCard, flex: 1, borderColor: '#22c55e' }}>
+                <div style={{ ...styles.kpiIcon, color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.12)' }}>✓</div>
+                <div>
+                  <span style={{ ...styles.kpiValue, color: '#22c55e' }}>
+                    {riders.filter((r) => r.pwaStatus === 'READY' || r.status === 'ACTIVE').length}
+                  </span>
+                  <span style={styles.kpiLabel}>PWA Ready / Active</span>
+                </div>
+              </div>
+
+              <div style={{ ...styles.kpiCard, flex: 1, borderColor: '#f59e0b' }}>
+                <div style={{ ...styles.kpiIcon, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>📩</div>
+                <div>
+                  <span style={{ ...styles.kpiValue, color: '#f59e0b' }}>
+                    {riders.filter((r) => r.pwaStatus === 'LINK_SENT' || r.pwaStatus === 'PENDING').length}
+                  </span>
+                  <span style={styles.kpiLabel}>Pending Onboarding Invites</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div style={styles.tableCard}>
+              <div style={styles.tableHeaderBar}>
+                <div>
+                  <h3 style={styles.tableTitle}>Authorized Fleet Couriers</h3>
+                  <span style={styles.tableSubtitle}>
+                    Each courier has a permanent personalized onboarding token link into the REFLEX Rider PWA
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    placeholder="🔍 Search courier name, phone, code..."
+                    value={riderSearchTerm}
+                    onChange={(e) => setRiderSearchTerm(e.target.value)}
+                    style={styles.tableSearchInput}
+                  />
+
+                  <div style={styles.filterPills}>
+                    <button
+                      style={{
+                        ...styles.filterPill,
+                        ...(riderStatusFilter === 'ALL' ? styles.filterPillActive : {})
+                      }}
+                      onClick={() => setRiderStatusFilter('ALL')}
+                    >
+                      All ({riders.length})
+                    </button>
+                    <button
+                      style={{
+                        ...styles.filterPill,
+                        ...(riderStatusFilter === 'READY' ? styles.filterPillActive : {})
+                      }}
+                      onClick={() => setRiderStatusFilter('READY')}
+                    >
+                      PWA Ready
+                    </button>
+                    <button
+                      style={{
+                        ...styles.filterPill,
+                        ...(riderStatusFilter === 'LINK_SENT' ? styles.filterPillActive : {})
+                      }}
+                      onClick={() => setRiderStatusFilter('LINK_SENT')}
+                    >
+                      Invite Sent
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Courier Table */}
+              <div style={styles.tableResponsiveWrapper}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.trHead}>
+                      <th style={styles.th}>COURIER</th>
+                      <th style={styles.th}>PHONE NUMBER</th>
+                      <th style={styles.th}>EMAIL</th>
+                      <th style={styles.th}>PRIMARY HUB</th>
+                      <th style={styles.th}>STATUS</th>
+                      <th style={styles.th}>PWA READINESS</th>
+                      <th style={styles.th}>ONBOARDING ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {riders
+                      .filter((r) => {
+                        if (riderStatusFilter === 'READY' && r.pwaStatus !== 'READY' && r.status !== 'ACTIVE') return false;
+                        if (riderStatusFilter === 'LINK_SENT' && r.pwaStatus !== 'LINK_SENT') return false;
+                        if (riderSearchTerm.trim()) {
+                          const q = riderSearchTerm.toLowerCase();
+                          return (
+                            (r.name || '').toLowerCase().includes(q) ||
+                            (r.phone || '').toLowerCase().includes(q) ||
+                            (r.code || '').toLowerCase().includes(q) ||
+                            (r.email || '').toLowerCase().includes(q) ||
+                            (r.hub || '').toLowerCase().includes(q)
+                          );
+                        }
+                        return true;
+                      })
+                      .map((rider) => {
+                        const onboardingLink = rider.onboardingUrl || `${window.location.origin}/join/${rider.onboardingToken || 'token_' + rider.id}`;
+                        const isRegenerating = regeneratingRiderId === rider.id;
+
+                        return (
+                          <tr key={rider.id || rider.code} style={styles.trBody}>
+                            <td style={styles.td}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={styles.riderTableAvatar}>
+                                  {(rider.name || 'R').slice(0, 1)}
+                                </div>
+                                <div>
+                                  <strong style={{ color: '#ffffff', fontSize: '13.5px', display: 'block' }}>
+                                    {rider.name}
+                                  </strong>
+                                  <code style={styles.refCode}>{rider.code || `#${rider.id}`}</code>
+                                </div>
+                              </div>
+                            </td>
+                            <td style={styles.td}>
+                              <strong style={{ color: '#38bdf8', fontSize: '13px' }}>{rider.phone}</strong>
+                            </td>
+                            <td style={styles.td}>
+                              <span style={{ color: '#94a3b8', fontSize: '12.5px' }}>{rider.email || '—'}</span>
+                            </td>
+                            <td style={styles.td}>
+                              <span style={{ color: '#cbd5e1', fontSize: '12.5px' }}>📍 {rider.hub || 'Nairobi Central'}</span>
+                            </td>
+                            <td style={styles.td}>
+                              <span
+                                style={{
+                                  ...styles.badge,
+                                  backgroundColor: rider.status === 'ACTIVE' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                  color: rider.status === 'ACTIVE' ? '#4ade80' : '#fbbf24',
+                                  borderColor: rider.status === 'ACTIVE' ? '#22c55e' : '#f59e0b'
+                                }}
+                              >
+                                {rider.status || 'ACTIVE'}
+                              </span>
+                            </td>
+                            <td style={styles.td}>
+                              {rider.pwaStatus === 'READY' || rider.status === 'ACTIVE' ? (
+                                <span style={styles.pwaReadyBadge}>✓ PWA Ready</span>
+                              ) : (
+                                <span style={styles.pwaPendingBadge}>📩 Invite Sent</span>
+                              )}
+                            </td>
+                            <td style={styles.td}>
+                              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <button
+                                  style={styles.actionBtnSecondary}
+                                  title="Copy Rider PWA Access Link"
+                                  onClick={() => handleCopyPwaLink(onboardingLink, rider.name)}
+                                >
+                                  📋 Copy Link
+                                </button>
+                                <button
+                                  style={styles.actionBtnShare}
+                                  title="Share link via WhatsApp / SMS"
+                                  onClick={() => handleSharePwaLink(onboardingLink, rider)}
+                                >
+                                  📱 Share
+                                </button>
+                                <button
+                                  style={styles.actionBtnGhost}
+                                  title="Regenerate unique onboarding link"
+                                  disabled={isRegenerating}
+                                  onClick={() => handleRegenerateRiderLink(rider.id)}
+                                >
+                                  {isRegenerating ? '⏳' : '🔄 Refresh'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -2598,6 +3176,205 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* 9. Register New Rider Modal */}
+      {isRegisterRiderModalOpen && (
+        <div style={styles.modalOverlay} onClick={() => setIsRegisterRiderModalOpen(false)}>
+          <div style={{ ...styles.modalCard, maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ ...styles.newDeliveryIconBadge, backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
+                  🏍️
+                </div>
+                <div>
+                  <h3 style={styles.modalTitle}>Register New Rider</h3>
+                  <span style={styles.modalSubTag}>ONBOARDING &amp; UNIQUE PWA ACCESS TOKEN</span>
+                </div>
+              </div>
+              <button onClick={() => setIsRegisterRiderModalOpen(false)} style={styles.modalCloseBtn}>✕</button>
+            </div>
+
+            <form onSubmit={handleRegisterRiderSubmit} style={styles.modalBody}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>
+                  Full Name <span style={styles.requiredAsterisk}>*</span>
+                </label>
+                <input
+                  style={{
+                    ...styles.fieldInput,
+                    borderColor: riderFormErrors.name ? '#ef4444' : '#334155',
+                    backgroundColor: riderFormErrors.name ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                  }}
+                  value={riderFormData.name}
+                  onChange={(e) => setRiderFormData({ ...riderFormData, name: e.target.value })}
+                  placeholder="e.g. Kevin Mwangi / Brian Otieno"
+                  disabled={isSubmittingRider}
+                />
+                {riderFormErrors.name && (
+                  <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.name}</span>
+                )}
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>
+                  Phone Number <span style={styles.requiredAsterisk}>*</span>
+                </label>
+                <input
+                  style={{
+                    ...styles.fieldInput,
+                    borderColor: riderFormErrors.phone ? '#ef4444' : '#334155',
+                    backgroundColor: riderFormErrors.phone ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                  }}
+                  value={riderFormData.phone}
+                  onChange={(e) => setRiderFormData({ ...riderFormData, phone: e.target.value })}
+                  placeholder="e.g. +254701234567 or 0701234567"
+                  disabled={isSubmittingRider}
+                />
+                {riderFormErrors.phone && (
+                  <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.phone}</span>
+                )}
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Email Address (Optional)</label>
+                <input
+                  type="email"
+                  style={{
+                    ...styles.fieldInput,
+                    borderColor: riderFormErrors.email ? '#ef4444' : '#334155',
+                    backgroundColor: riderFormErrors.email ? 'rgba(239, 68, 68, 0.06)' : '#1e293b'
+                  }}
+                  value={riderFormData.email}
+                  onChange={(e) => setRiderFormData({ ...riderFormData, email: e.target.value })}
+                  placeholder="e.g. kevin@rider.co.ke"
+                  disabled={isSubmittingRider}
+                />
+                {riderFormErrors.email && (
+                  <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.email}</span>
+                )}
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Assigned Hub / Node</label>
+                <select
+                  style={styles.fieldSelect}
+                  value={riderFormData.hub}
+                  onChange={(e) => setRiderFormData({ ...riderFormData, hub: e.target.value })}
+                  disabled={isSubmittingRider}
+                >
+                  <option value="Westlands Hub">Westlands Hub (HQ)</option>
+                  <option value="CBD Depot">Nairobi CBD Depot</option>
+                  <option value="Kilimani Node">Kilimani Node</option>
+                  <option value="Lavington Node">Lavington Node</option>
+                  <option value="Eastleigh Depot">Eastleigh Depot</option>
+                  <option value="Karen Hub">Karen Hub</option>
+                  <option value="Industrial Area">Industrial Area Node</option>
+                </select>
+              </div>
+
+              <div style={styles.formActionsRow}>
+                <button
+                  type="button"
+                  onClick={() => setIsRegisterRiderModalOpen(false)}
+                  style={styles.btnSecondary}
+                  disabled={isSubmittingRider}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingRider}
+                  style={styles.btnPrimary}
+                >
+                  {isSubmittingRider ? 'Registering Rider...' : '🚀 Register Rider & Generate Link'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 10. Rider Registration Success & PWA Link Modal */}
+      {registeredRiderSuccess && (
+        <div style={styles.modalOverlay} onClick={() => setRegisteredRiderSuccess(null)}>
+          <div style={{ ...styles.modalCard, maxWidth: '580px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div>
+                <span style={styles.modalSubTag}>ONBOARDING READY</span>
+                <h3 style={styles.modalTitle}>Rider Registered Successfully ✅</h3>
+              </div>
+              <button onClick={() => setRegisteredRiderSuccess(null)} style={styles.modalCloseBtn}>✕</button>
+            </div>
+
+            <div style={styles.modalBody}>
+              {/* Rider Banner Card */}
+              <div style={styles.onboardingSuccessRiderBanner}>
+                <div style={styles.riderTableAvatar}>
+                  {(registeredRiderSuccess.rider.name || 'R').slice(0, 1)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <code style={styles.refCode}>
+                      {registeredRiderSuccess.rider.code || `#${registeredRiderSuccess.rider.id}`}
+                    </code>
+                    <span style={styles.pwaReadyBadge}>READY FOR PWA</span>
+                  </div>
+                  <strong style={{ fontSize: '15px', color: '#ffffff', display: 'block', marginTop: '2px' }}>
+                    {registeredRiderSuccess.rider.name}
+                  </strong>
+                  <span style={{ fontSize: '12px', color: '#38bdf8' }}>
+                    📞 {registeredRiderSuccess.rider.phone} • 📍 {registeredRiderSuccess.rider.hub || 'Westlands'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Unique PWA Link Box */}
+              <div style={styles.pwaLinkBoxContainer}>
+                <span style={styles.modalLabel}>🔗 PERSONALIZED RIDER PWA ACCESS LINK</span>
+                <div style={styles.pwaLinkInputGroup}>
+                  <input
+                    readOnly
+                    value={registeredRiderSuccess.onboardingUrl}
+                    style={styles.pwaLinkInput}
+                    onClick={(e) => e.target.select()}
+                  />
+                  <button
+                    type="button"
+                    style={styles.copyLinkInsideBtn}
+                    onClick={() => handleCopyPwaLink(registeredRiderSuccess.onboardingUrl, registeredRiderSuccess.rider.name)}
+                  >
+                    📋 Copy
+                  </button>
+                </div>
+                <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>
+                  Send this link to the rider. When opened, it securely pairs their device to the permanent REFLEX Rider PWA.
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={styles.onboardingSuccessActionsRow}>
+                <button
+                  type="button"
+                  style={styles.shareWaBtn}
+                  onClick={() => handleSharePwaLink(registeredRiderSuccess.onboardingUrl, registeredRiderSuccess.rider)}
+                >
+                  📱 Share via WhatsApp / SMS
+                </button>
+                <button
+                  type="button"
+                  style={styles.modalDoneBtn}
+                  onClick={() => {
+                    setRegisteredRiderSuccess(null);
+                    setActiveTab('riders');
+                  }}
+                >
+                  ✓ Done &amp; View in Roster
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3342,5 +4119,344 @@ const styles = {
     fontWeight: '700',
     textDecoration: 'none',
     cursor: 'pointer',
+  },
+  // ─── Rider PWA Onboarding Gateway & Fleet Management Styles ───
+  onboardingPageContainer: {
+    minHeight: '100vh',
+    width: '100vw',
+    backgroundColor: '#090d16',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px',
+    boxSizing: 'border-box',
+    fontFamily: '"Inter", Arial, Helvetica, sans-serif'
+  },
+  onboardingCard: {
+    backgroundColor: '#131c2e',
+    borderRadius: '24px',
+    padding: '32px 24px',
+    width: '100%',
+    maxWidth: '480px',
+    border: '1.5px solid #1e293b',
+    boxShadow: '0 25px 60px rgba(0,0,0,0.8)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    gap: '20px',
+    boxSizing: 'border-box'
+  },
+  onboardingHeaderGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '6px'
+  },
+  onboardingLogoBadge: {
+    width: '48px',
+    height: '48px',
+    backgroundColor: '#0284c7',
+    borderRadius: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '24px',
+    boxShadow: '0 4px 16px rgba(2, 132, 199, 0.4)'
+  },
+  onboardingBrandTitle: {
+    margin: 0,
+    fontSize: '22px',
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: '-0.4px'
+  },
+  onboardingSubTag: {
+    fontSize: '10.5px',
+    fontWeight: '800',
+    color: '#38bdf8',
+    letterSpacing: '0.8px'
+  },
+  onboardingLoadingBox: {
+    padding: '30px 20px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px'
+  },
+  onboardingContent: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    textAlign: 'left'
+  },
+  welcomeHeroBox: {
+    backgroundColor: 'rgba(2, 132, 199, 0.12)',
+    border: '1px solid rgba(56, 189, 248, 0.3)',
+    borderRadius: '16px',
+    padding: '16px',
+    textAlign: 'center'
+  },
+  welcomeHeroIcon: {
+    fontSize: '32px',
+    marginBottom: '4px'
+  },
+  welcomeHeroTitle: {
+    margin: '0 0 6px 0',
+    fontSize: '19px',
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  welcomeHeroSubtitle: {
+    margin: 0,
+    fontSize: '13px',
+    color: '#cbd5e1',
+    lineHeight: '1.5'
+  },
+  onboardingRiderCard: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #1e293b',
+    borderRadius: '16px',
+    padding: '16px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px'
+  },
+  onboardingAvatar: {
+    width: '44px',
+    height: '44px',
+    borderRadius: '12px',
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    fontSize: '18px',
+    fontWeight: '900',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  onboardingCodeTag: {
+    fontFamily: 'monospace',
+    fontSize: '11px',
+    fontWeight: 'bold',
+    backgroundColor: '#1e293b',
+    color: '#38bdf8',
+    padding: '2px 6px',
+    borderRadius: '6px'
+  },
+  pwaActiveBadge: {
+    fontSize: '10.5px',
+    fontWeight: '800',
+    color: '#22c55e',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    padding: '2px 8px',
+    borderRadius: '6px',
+    border: '1px solid #22c55e'
+  },
+  onboardingNameText: {
+    fontSize: '15.5px',
+    color: '#ffffff',
+    display: 'block',
+    marginTop: '4px'
+  },
+  onboardingMetaText: {
+    fontSize: '12px',
+    color: '#94a3b8',
+    display: 'block',
+    marginTop: '2px'
+  },
+  homeScreenPromptCard: {
+    backgroundColor: '#1e293b',
+    border: '1px dashed #38bdf8',
+    borderRadius: '14px',
+    padding: '12px 14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px'
+  },
+  onboardingContinueBtn: {
+    width: '100%',
+    height: '48px',
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '12px',
+    fontSize: '14px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 16px rgba(2, 132, 199, 0.4)',
+    transition: 'all 0.15s ease'
+  },
+  onboardingInvalidBox: {
+    padding: '20px 10px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px',
+    textAlign: 'center'
+  },
+  invalidIconCircle: {
+    width: '56px',
+    height: '56px',
+    borderRadius: '50%',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    border: '1.5px solid #ef4444',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '24px'
+  },
+  invalidTitle: {
+    margin: 0,
+    fontSize: '18px',
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  invalidMessage: {
+    margin: 0,
+    fontSize: '13px',
+    color: '#cbd5e1',
+    lineHeight: '1.5'
+  },
+  onboardingReturnBtn: {
+    marginTop: '8px',
+    backgroundColor: '#1e293b',
+    color: '#38bdf8',
+    border: '1px solid #334155',
+    padding: '10px 20px',
+    borderRadius: '10px',
+    fontSize: '13px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  riderTableAvatar: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    fontSize: '13px',
+    fontWeight: '800',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  pwaReadyBadge: {
+    fontSize: '11px',
+    fontWeight: '800',
+    color: '#4ade80',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    padding: '3px 8px',
+    borderRadius: '8px',
+    border: '1px solid #22c55e',
+    display: 'inline-flex',
+    alignItems: 'center'
+  },
+  pwaPendingBadge: {
+    fontSize: '11px',
+    fontWeight: '800',
+    color: '#fbbf24',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    padding: '3px 8px',
+    borderRadius: '8px',
+    border: '1px solid #f59e0b',
+    display: 'inline-flex',
+    alignItems: 'center'
+  },
+  actionBtnSecondary: {
+    padding: '6px 10px',
+    backgroundColor: '#1e293b',
+    color: '#ffffff',
+    border: '1px solid #334155',
+    borderRadius: '8px',
+    fontSize: '11.5px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  actionBtnShare: {
+    padding: '6px 10px',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    color: '#4ade80',
+    border: '1px solid #22c55e',
+    borderRadius: '8px',
+    fontSize: '11.5px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  actionBtnGhost: {
+    padding: '6px 10px',
+    backgroundColor: 'transparent',
+    color: '#94a3b8',
+    border: '1px solid #334155',
+    borderRadius: '8px',
+    fontSize: '11.5px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  onboardingSuccessRiderBanner: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #1e293b',
+    borderRadius: '14px',
+    padding: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px'
+  },
+  pwaLinkBoxContainer: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #334155',
+    borderRadius: '14px',
+    padding: '14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  pwaLinkInputGroup: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center'
+  },
+  pwaLinkInput: {
+    flex: 1,
+    height: '40px',
+    backgroundColor: '#1e293b',
+    border: '1px solid #38bdf8',
+    borderRadius: '8px',
+    padding: '0 10px',
+    color: '#38bdf8',
+    fontFamily: 'monospace',
+    fontSize: '12px',
+    fontWeight: 'bold',
+    outline: 'none'
+  },
+  copyLinkInsideBtn: {
+    height: '40px',
+    padding: '0 14px',
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '12.5px',
+    fontWeight: '800',
+    cursor: 'pointer'
+  },
+  onboardingSuccessActionsRow: {
+    display: 'flex',
+    gap: '10px',
+    marginTop: '6px'
+  },
+  shareWaBtn: {
+    flex: 1,
+    height: '44px',
+    backgroundColor: '#16a34a',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '10px',
+    fontSize: '13px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)'
   },
 };

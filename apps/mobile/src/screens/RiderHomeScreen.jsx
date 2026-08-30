@@ -47,6 +47,13 @@ export default function RiderHomeScreen({
   });
 
   const getRiderName = (id) => {
+    try {
+      const saved = localStorage.getItem('reflex_mobile_rider');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (String(parsed.id) === String(id)) return parsed.name;
+      }
+    } catch (e) {}
     if (id === '4') return 'Brian Mutua';
     if (id === '5') return 'Grace Wanjiru';
     if (id === '6') return 'James Otieno';
