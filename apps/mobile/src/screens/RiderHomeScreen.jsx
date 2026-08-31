@@ -72,8 +72,8 @@ export default function RiderHomeScreen({
           <div style={styles.brandGroup}>
             <div style={styles.logoBadge}>âš¡</div>
             <div>
-              <h1 style={styles.appTitle}>KASI Rider</h1>
-              <span style={styles.regionTag}>âš¡ Express Logistics Network</span>
+              <h1 style={styles.appTitle}>Reflex Rider</h1>
+              <span style={styles.regionTag}>⚡ Smart Bodaboda Delivery Network</span>
             </div>
           </div>
 
