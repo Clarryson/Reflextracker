@@ -32,29 +32,29 @@ export const ZONE_BASE_FEES = {
 };
 
 export const ESTIMATED_TIMES = {
-  Westlands: { Normal: '45–60 mins', High: '30–45 mins', Urgent: '20–30 mins' },
-  CBD: { Normal: '30–45 mins', High: '25–35 mins', Urgent: '15–25 mins' },
-  Kilimani: { Normal: '40–55 mins', High: '30–40 mins', Urgent: '20–30 mins' },
-  Parklands: { Normal: '40–55 mins', High: '30–40 mins', Urgent: '20–30 mins' },
-  Lavington: { Normal: '45–60 mins', High: '35–45 mins', Urgent: '25–35 mins' },
-  Eastleigh: { Normal: '50–70 mins', High: '40–55 mins', Urgent: '30–40 mins' },
-  Karen: { Normal: '60–90 mins', High: '45–65 mins', Urgent: '35–50 mins' },
-  Embakasi: { Normal: '60–85 mins', High: '50–65 mins', Urgent: '35–50 mins' }
+  Westlands: { Normal: '45â€“60 mins', High: '30â€“45 mins', Urgent: '20â€“30 mins' },
+  CBD: { Normal: '30â€“45 mins', High: '25â€“35 mins', Urgent: '15â€“25 mins' },
+  Kilimani: { Normal: '40â€“55 mins', High: '30â€“40 mins', Urgent: '20â€“30 mins' },
+  Parklands: { Normal: '40â€“55 mins', High: '30â€“40 mins', Urgent: '20â€“30 mins' },
+  Lavington: { Normal: '45â€“60 mins', High: '35â€“45 mins', Urgent: '25â€“35 mins' },
+  Eastleigh: { Normal: '50â€“70 mins', High: '40â€“55 mins', Urgent: '30â€“40 mins' },
+  Karen: { Normal: '60â€“90 mins', High: '45â€“65 mins', Urgent: '35â€“50 mins' },
+  Embakasi: { Normal: '60â€“85 mins', High: '50â€“65 mins', Urgent: '35â€“50 mins' }
 };
 
 export const getEstimatedDeliveryTime = (zone, priority) => {
   const zoneTimes = ESTIMATED_TIMES[zone] || ESTIMATED_TIMES.Westlands;
-  return zoneTimes[priority] || zoneTimes.Normal || '45–60 mins';
+  return zoneTimes[priority] || zoneTimes.Normal || '45â€“60 mins';
 };
 
 export default function App() {
-  // ─── 0. Check URL for Mobile Phone QR Scan Redirection ───
+  // â”€â”€â”€ 0. Check URL for Mobile Phone QR Scan Redirection â”€â”€â”€
   const urlParams = new URLSearchParams(window.location.search);
   const verifyParam = urlParams.get('verify');
   const verifyIdParam = urlParams.get('id') || urlParams.get('deliveryId');
   const verifyTokenParam = urlParams.get('token');
 
-  // ─── 0b. Check URL for Rider PWA Onboarding (/join/:token or ?join=token) ───
+  // â”€â”€â”€ 0b. Check URL for Rider PWA Onboarding (/join/:token or ?join=token) â”€â”€â”€
   const pathParts = window.location.pathname.split('/');
   const isJoinPath = pathParts[1] === 'join' && pathParts[2];
   const joinTokenParam = isJoinPath ? pathParts[2] : (urlParams.get('join') || urlParams.get('onboarding') || urlParams.get('token'));
@@ -151,7 +151,7 @@ export default function App() {
   // Completed Delivery IDs Persistence (ensures delivered items stay DELIVERED)
   const [completedDeliveryIds, setCompletedDeliveryIds] = useState(() => {
     try {
-      const saved = localStorage.getItem('reflex_completed_ids');
+      const saved = localStorage.getItem('KASI_completed_ids');
       return saved ? JSON.parse(saved) : [6];
     } catch (e) {
       return [6];
@@ -172,11 +172,11 @@ export default function App() {
     if (!delivery) return '';
     const live = deliveries.find((d) => String(d.id) === String(delivery.id)) || delivery;
     const id = live.id || delivery.id;
-    const token = live.qrToken || live.qr_token || delivery.qrToken || delivery.qr_token || `REFLEX-${live.reference || 'DEL-0000' + id}`;
+    const token = live.qrToken || live.qr_token || delivery.qrToken || delivery.qr_token || `KASI-${live.reference || 'DEL-0000' + id}`;
     return `https://backend-production-7f0d0.up.railway.app/verify.html?id=${id}&token=${encodeURIComponent(token)}`;
   };
 
-  // ─── Image Compressor (canvas-based, mirrors mobile app) ───
+  // â”€â”€â”€ Image Compressor (canvas-based, mirrors mobile app) â”€â”€â”€
   const compressImage = (file, maxWidth = 1280, quality = 0.78) =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -202,7 +202,7 @@ export default function App() {
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 13px sans-serif';
           const ts = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-          ctx.fillText(`REFLEX PoD • ${ts}`, 10, h - Math.round(bar / 2) + 5);
+          ctx.fillText(`KASI PoD â€¢ ${ts}`, 10, h - Math.round(bar / 2) + 5);
           const dataUrl = canvas.toDataURL('image/jpeg', quality);
           canvas.toBlob((blob) => {
             if (blob) resolve({ blob, dataUrl, sizeKb: Math.round(blob.size / 1024) });
@@ -214,12 +214,12 @@ export default function App() {
       reader.onerror = (e) => reject(new Error('FileReader error: ' + e));
     });
 
-  // ─── Live Railway Auth & Tokens ───
+  // â”€â”€â”€ Live Railway Auth & Tokens â”€â”€â”€
   const getAuthToken = useCallback(async (role = 'dispatcher', specificRiderId = null) => {
     const key = specificRiderId ? `rider_${specificRiderId}` : role;
     if (tokenCache.current[key]) return tokenCache.current[key];
 
-    let email = import.meta.env.VITE_DISPATCHER_EMAIL || 'omondi@reflex.co.ke';
+    let email = import.meta.env.VITE_DISPATCHER_EMAIL || 'omondi@KASI.co.ke';
     let password = import.meta.env.VITE_DISPATCHER_PASSWORD || 'Password123!';
     
     if (role === 'retailer') {
@@ -255,7 +255,7 @@ export default function App() {
     return null;
   }, []);
 
-  // ─── Fetch Real Live Data from Railway ───
+  // â”€â”€â”€ Fetch Real Live Data from Railway â”€â”€â”€
   const fetchDeliveries = useCallback(async () => {
     try {
       const token = await getAuthToken('dispatcher');
@@ -319,7 +319,7 @@ export default function App() {
     }
   }, [getAuthToken]);
 
-  // ─── Check & Validate Rider Onboarding Token (/join/:token) ───
+  // â”€â”€â”€ Check & Validate Rider Onboarding Token (/join/:token) â”€â”€â”€
   useEffect(() => {
     if (!isOnboardingMode || !onboardingToken) return;
 
@@ -370,7 +370,7 @@ export default function App() {
     };
   }, [isOnboardingMode, onboardingToken]);
 
-  // ─── Direct URL QR Verification Handler (when phone camera scans barcode) ───
+  // â”€â”€â”€ Direct URL QR Verification Handler (when phone camera scans barcode) â”€â”€â”€
   const executeUrlVerification = useCallback(async (deliveryId, token) => {
     setUrlVerifyStatus('verifying');
     try {
@@ -392,7 +392,7 @@ export default function App() {
         // Mark as completed
         setCompletedDeliveryIds((prev) => {
           const updated = [...new Set([...prev, Number(deliveryId), String(deliveryId)])];
-          try { localStorage.setItem('reflex_completed_ids', JSON.stringify(updated)); } catch (e) {}
+          try { localStorage.setItem('KASI_completed_ids', JSON.stringify(updated)); } catch (e) {}
           return updated;
         });
 
@@ -421,7 +421,7 @@ export default function App() {
     }
   }, [isUrlVerifyMode, verifyIdParam]);
 
-  // ─── Real-Time WebSocket & Polling Sync ───
+  // â”€â”€â”€ Real-Time WebSocket & Polling Sync â”€â”€â”€
   useEffect(() => {
     fetchDeliveries();
     fetchRiders();
@@ -450,7 +450,7 @@ export default function App() {
     };
   }, [fetchDeliveries, fetchRiders]);
 
-  // ─── Retailer: Form Validation & Field Change Handlers ───
+  // â”€â”€â”€ Retailer: Form Validation & Field Change Handlers â”€â”€â”€
   const validateField = (field, value) => {
     let error = '';
     if (field === 'customerName' && (!value || !value.trim())) {
@@ -521,7 +521,7 @@ export default function App() {
   const handleCreateDeliveryRequest = async (e) => {
     if (e) e.preventDefault();
     if (!validateForm()) {
-      showNotification('⚠️ Please complete all required fields with valid details');
+      showNotification('âš ï¸ Please complete all required fields with valid details');
       return;
     }
 
@@ -568,11 +568,11 @@ export default function App() {
           deliveryFee: formData.deliveryFee,
           riderNotes: formData.riderNotes,
           estimatedTime: getEstimatedDeliveryTime(formData.zone, formData.priority),
-          qrToken: created.qrToken || `REFLEX-${created.reference || created.id}-${Date.now().toString(36).toUpperCase()}`
+          qrToken: created.qrToken || `KASI-${created.reference || created.id}-${Date.now().toString(36).toUpperCase()}`
         };
 
         setCreatedDeliverySlip(qrSlipData);
-        showNotification(`✅ Delivery created! Waybill #${qrSlipData.reference} is now 📦 OPEN in database`);
+        showNotification(`âœ… Delivery created! Waybill #${qrSlipData.reference} is now ðŸ“¦ OPEN in database`);
         await fetchDeliveries();
 
         // Reset form
@@ -590,16 +590,16 @@ export default function App() {
         });
         setFormErrors({});
       } else {
-        showNotification(`⚠️ ${data.message || 'Failed to create delivery on server'}`);
+        showNotification(`âš ï¸ ${data.message || 'Failed to create delivery on server'}`);
       }
     } catch (err) {
-      showNotification(`❌ Network error: ${err.message}`);
+      showNotification(`âŒ Network error: ${err.message}`);
     } finally {
       setIsSubmittingDelivery(false);
     }
   };
 
-  // ─── Dispatcher: Create Delivery Order (Railway REST fallback) ───
+  // â”€â”€â”€ Dispatcher: Create Delivery Order (Railway REST fallback) â”€â”€â”€
   const handleCreateOrder = async (e) => {
     e.preventDefault();
     if (!customerName || !address || !phone || !itemDescription) return;
@@ -623,23 +623,23 @@ export default function App() {
 
       const data = await res.json();
       if (data.success) {
-        showNotification(`✅ Delivery created! Order ${data.data?.delivery?.reference || 'DEL'} is now 📦 OPEN in database`);
+        showNotification(`âœ… Delivery created! Order ${data.data?.delivery?.reference || 'DEL'} is now ðŸ“¦ OPEN in database`);
         setCustomerName('');
         setPhone('');
         setItemDescription('');
         setAddress('');
         await fetchDeliveries();
       } else {
-        showNotification(`⚠️ ${data.message || 'Failed to create delivery'}`);
+        showNotification(`âš ï¸ ${data.message || 'Failed to create delivery'}`);
       }
     } catch (err) {
-      showNotification(`❌ Connection error: ${err.message}`);
+      showNotification(`âŒ Connection error: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ─── Retailer / Dispatcher: Register Rider & PWA Link Management ───
+  // â”€â”€â”€ Retailer / Dispatcher: Register Rider & PWA Link Management â”€â”€â”€
   const handleRegisterRiderSubmit = async (e) => {
     if (e) e.preventDefault();
     const errors = {};
@@ -700,11 +700,11 @@ export default function App() {
           setIsRegisterRiderModalOpen(false);
           setRiderFormData({ name: '', phone: '', email: '', hub: 'Westlands Hub' });
           setRiderFormErrors({});
-          showNotification(`✅ Rider ${created.name} registered! PWA access link generated.`);
+          showNotification(`âœ… Rider ${created.name} registered! PWA access link generated.`);
           await fetchRiders();
           return;
         } else if (data.message) {
-          showNotification(`⚠️ ${data.message}`);
+          showNotification(`âš ï¸ ${data.message}`);
           return;
         }
       }
@@ -717,7 +717,7 @@ export default function App() {
         code: `RIDER-${nextId.padStart(3, '0')}`,
         name: riderFormData.name.trim(),
         phone: riderFormData.phone.trim(),
-        email: riderFormData.email.trim() || `${riderFormData.name.toLowerCase().replace(/\s+/g, '.')}@rider.reflex.co.ke`,
+        email: riderFormData.email.trim() || `${riderFormData.name.toLowerCase().replace(/\s+/g, '.')}@rider.KASI.co.ke`,
         hub: riderFormData.hub || 'Westlands Hub',
         status: 'ACTIVE',
         pwaStatus: 'LINK_SENT',
@@ -729,9 +729,9 @@ export default function App() {
       setIsRegisterRiderModalOpen(false);
       setRiderFormData({ name: '', phone: '', email: '', hub: 'Westlands Hub' });
       setRiderFormErrors({});
-      showNotification(`✅ Rider ${localRider.name} registered locally!`);
+      showNotification(`âœ… Rider ${localRider.name} registered locally!`);
     } catch (err) {
-      showNotification(`❌ Error registering rider: ${err.message}`);
+      showNotification(`âŒ Error registering rider: ${err.message}`);
     } finally {
       setIsSubmittingRider(false);
     }
@@ -752,7 +752,7 @@ export default function App() {
       if (res && res.ok) {
         const data = await res.json();
         if (data.success && data.data?.onboardingUrl) {
-          showNotification(`🔄 New PWA access link generated for Rider #${riderId}!`);
+          showNotification(`ðŸ”„ New PWA access link generated for Rider #${riderId}!`);
           await fetchRiders();
           setRegisteredRiderSuccess({
             rider: data.data.rider,
@@ -770,10 +770,10 @@ export default function App() {
         const updated = { ...target, onboardingToken: freshToken, onboardingUrl: freshUrl, pwaStatus: 'LINK_SENT' };
         setRiders(prev => prev.map(r => String(r.id) === String(riderId) ? updated : r));
         setRegisteredRiderSuccess({ rider: updated, onboardingUrl: freshUrl });
-        showNotification(`🔄 New PWA link generated for ${target.name}!`);
+        showNotification(`ðŸ”„ New PWA link generated for ${target.name}!`);
       }
     } catch (err) {
-      showNotification(`❌ Error: ${err.message}`);
+      showNotification(`âŒ Error: ${err.message}`);
     } finally {
       setRegeneratingRiderId(null);
     }
@@ -782,22 +782,22 @@ export default function App() {
   const handleCopyPwaLink = (url, riderName) => {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url);
-      showNotification(`📋 Copied PWA link for ${riderName || 'rider'} to clipboard!`);
+      showNotification(`ðŸ“‹ Copied PWA link for ${riderName || 'rider'} to clipboard!`);
     } else {
       showNotification(`Link: ${url}`);
     }
   };
 
   const handleSharePwaLink = async (url, rider) => {
-    const text = `Hi ${rider.name}, here is your official REFLEX Rider PWA access link. Open and add it to your Home Screen to start receiving delivery dispatches:\n${url}`;
+    const text = `Hi ${rider.name}, here is your official KASI Rider PWA access link. Open and add it to your Home Screen to start receiving delivery dispatches:\n${url}`;
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'REFLEX Rider PWA Access',
+          title: 'KASI Rider PWA Access',
           text,
           url
         });
-        showNotification('✓ Shared via system dialog');
+        showNotification('âœ“ Shared via system dialog');
         return;
       } catch (e) {}
     }
@@ -811,11 +811,11 @@ export default function App() {
       (d) => String(d.riderId) === String(rId) && (d.status === 'ASSIGNED' || d.status === 'PICKED_UP')
     );
     if (activeTasks.length === 0) {
-      return { status: 'AVAILABLE', label: '🟢 Available', color: '#22c55e' };
+      return { status: 'AVAILABLE', label: 'ðŸŸ¢ Available', color: '#22c55e' };
     }
     return {
       status: 'ON_DELIVERY',
-      label: `🟡 On Delivery (${activeTasks.length} active)`,
+      label: `ðŸŸ¡ On Delivery (${activeTasks.length} active)`,
       color: '#f59e0b'
     };
   };
@@ -853,14 +853,14 @@ export default function App() {
         )
       );
 
-      showNotification(`🚴 Assigned delivery to ${riderName} (Status: ASSIGNED)`);
+      showNotification(`ðŸš´ Assigned delivery to ${riderName} (Status: ASSIGNED)`);
       fetchDeliveries();
     } catch (err) {
-      showNotification(`❌ Error: ${err.message}`);
+      showNotification(`âŒ Error: ${err.message}`);
     }
   };
 
-  // ─── Rider: Confirm Pickup (Railway REST) ───
+  // â”€â”€â”€ Rider: Confirm Pickup (Railway REST) â”€â”€â”€
   const handleConfirmPickup = async (delivery) => {
     try {
       const token = await getAuthToken('rider', activeRiderId);
@@ -870,19 +870,19 @@ export default function App() {
       });
       const data = await res.json();
       if (data.success) {
-        showNotification(`📦 Package picked up for Waybill ${delivery.reference || '#' + delivery.id}`);
+        showNotification(`ðŸ“¦ Package picked up for Waybill ${delivery.reference || '#' + delivery.id}`);
         setIsPickupModalOpen(false);
         await fetchDeliveries();
         setSelectedRiderDelivery({ ...delivery, status: 'PICKED_UP' });
       } else {
-        showNotification(`⚠️ ${data.message || 'Pickup failed'}`);
+        showNotification(`âš ï¸ ${data.message || 'Pickup failed'}`);
       }
     } catch (err) {
-      showNotification(`❌ Error: ${err.message}`);
+      showNotification(`âŒ Error: ${err.message}`);
     }
   };
 
-  // ─── Rider: Photo Proof Capture with real canvas compression ───
+  // â”€â”€â”€ Rider: Photo Proof Capture with real canvas compression â”€â”€â”€
   const handlePhotoCapture = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -891,7 +891,7 @@ export default function App() {
       const result = await compressImage(file);
       setPodPhoto({ blob: result.blob, dataUrl: result.dataUrl, sizeKb: result.sizeKb });
       setIsPhotoModalOpen(false);
-      showNotification(`📷 Photo captured & compressed (${result.sizeKb} KB) — ready to upload`);
+      showNotification(`ðŸ“· Photo captured & compressed (${result.sizeKb} KB) â€” ready to upload`);
     } catch (err) {
       alert('Photo processing error: ' + err.message);
     } finally {
@@ -899,7 +899,7 @@ export default function App() {
     }
   };
 
-  // ─── Rider: Verify QR Token against Railway live ───
+  // â”€â”€â”€ Rider: Verify QR Token against Railway live â”€â”€â”€
   const handleVerifyQRToken = async (code) => {
     if (!selectedRiderDelivery || !code) return;
     setIsVerifyingQR(true);
@@ -913,7 +913,7 @@ export default function App() {
       if (res.ok || res.status === 400) {
         setVerifiedQRToken(code);
         setIsQRModalOpen(false);
-        showNotification('✓ QR Code Verified');
+        showNotification('âœ“ QR Code Verified');
       } else {
         const j = await res.json().catch(() => ({}));
         alert('Verification notice: ' + (j.message || `HTTP ${res.status}`));
@@ -921,13 +921,13 @@ export default function App() {
     } catch (err) {
       setVerifiedQRToken(code);
       setIsQRModalOpen(false);
-      showNotification('✓ QR Code Verified');
+      showNotification('âœ“ QR Code Verified');
     } finally {
       setIsVerifyingQR(false);
     }
   };
 
-  // ─── Rider: Complete Delivery — real Railway calls (QR verification only) ───
+  // â”€â”€â”€ Rider: Complete Delivery â€” real Railway calls (QR verification only) â”€â”€â”€
   const handleCompleteDelivery = async () => {
     if (!selectedRiderDelivery) return;
     const isVerified = Boolean(verifiedQRToken || selectedRiderDelivery.qrVerified);
@@ -956,7 +956,7 @@ export default function App() {
         await fetch(`${API_BASE}/deliveries/${selectedRiderDelivery.id}/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({ notes: 'Verified & delivered via Reflex Rider Console' })
+          body: JSON.stringify({ notes: 'Verified & delivered via KASI Rider Console' })
         });
       } catch (e) {
         console.warn('Complete call notice:', e.message);
@@ -965,7 +965,7 @@ export default function App() {
       // Mark as completed in local state & storage
       const newDone = [...new Set([...completedDeliveryIds, selectedRiderDelivery.id, String(selectedRiderDelivery.id)])];
       setCompletedDeliveryIds(newDone);
-      try { localStorage.setItem('reflex_completed_ids', JSON.stringify(newDone)); } catch (e) {}
+      try { localStorage.setItem('KASI_completed_ids', JSON.stringify(newDone)); } catch (e) {}
 
       // Show success celebration
       const completedRecord = { ...selectedRiderDelivery, status: 'DELIVERED', deliveredAt: new Date().toISOString() };
@@ -974,10 +974,10 @@ export default function App() {
       setSelectedRiderDelivery(null);
       setVerifiedQRToken('');
       setManualPinInput('');
-      showNotification('✓ Delivery verified & completed successfully!');
+      showNotification('âœ“ Delivery verified & completed successfully!');
       await fetchDeliveries();
     } catch (err) {
-      alert(`❌ Verification notice: ${err.message}`);
+      alert(`âŒ Verification notice: ${err.message}`);
     } finally {
       setIsCompletingDelivery(false);
     }
@@ -985,14 +985,14 @@ export default function App() {
 
 
 
-  // ─── IF OPENED VIA RIDER PWA INVITATION LINK (/join/:token or ?join=token) ───
+  // â”€â”€â”€ IF OPENED VIA RIDER PWA INVITATION LINK (/join/:token or ?join=token) â”€â”€â”€
   if (isOnboardingMode) {
     return (
       <div style={styles.onboardingPageContainer}>
         <div style={styles.onboardingCard}>
           <div style={styles.onboardingHeaderGroup}>
-            <div style={styles.onboardingLogoBadge}>⚡</div>
-            <h1 style={styles.onboardingBrandTitle}>REFLEX Rider PWA</h1>
+            <div style={styles.onboardingLogoBadge}>âš¡</div>
+            <h1 style={styles.onboardingBrandTitle}>KASI Rider PWA</h1>
             <span style={styles.onboardingSubTag}>OFFICIAL COURIER ONBOARDING GATEWAY</span>
           </div>
 
@@ -1008,10 +1008,10 @@ export default function App() {
           {onboardingStatus === 'valid' && onboardingRider && (
             <div style={styles.onboardingContent}>
               <div style={styles.welcomeHeroBox}>
-                <div style={styles.welcomeHeroIcon}>👋</div>
-                <h2 style={styles.welcomeHeroTitle}>Welcome to REFLEX!</h2>
+                <div style={styles.welcomeHeroIcon}>ðŸ‘‹</div>
+                <h2 style={styles.welcomeHeroTitle}>Welcome to KASI!</h2>
                 <p style={styles.welcomeHeroSubtitle}>
-                  Hi <strong>{onboardingRider.name}</strong>, you have been registered as an authorized REFLEX delivery courier.
+                  Hi <strong>{onboardingRider.name}</strong>, you have been registered as an authorized KASI delivery courier.
                 </p>
               </div>
 
@@ -1023,19 +1023,19 @@ export default function App() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <code style={styles.onboardingCodeTag}>{onboardingRider.code || `#${onboardingRider.id}`}</code>
-                    <span style={styles.pwaActiveBadge}>✓ PWA ACTIVE</span>
+                    <span style={styles.pwaActiveBadge}>âœ“ PWA ACTIVE</span>
                   </div>
                   <strong style={styles.onboardingNameText}>{onboardingRider.name}</strong>
-                  <span style={styles.onboardingMetaText}>📞 {onboardingRider.phone} • 📍 {onboardingRider.hub || 'Westlands Hub'}</span>
+                  <span style={styles.onboardingMetaText}>ðŸ“ž {onboardingRider.phone} â€¢ ðŸ“ {onboardingRider.hub || 'Westlands Hub'}</span>
                 </div>
               </div>
 
               {/* PWA Home Screen Prompt Banner */}
               <div style={styles.homeScreenPromptCard}>
-                <span style={{ fontSize: '20px' }}>📲</span>
+                <span style={{ fontSize: '20px' }}>ðŸ“²</span>
                 <div>
                   <strong style={{ fontSize: '13px', color: '#ffffff', display: 'block' }}>
-                    Add REFLEX to your Home Screen
+                    Add KASI to your Home Screen
                   </strong>
                   <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>
                     Tap your browser menu and select "Add to Home screen" for instant 1-tap dispatch access.
@@ -1051,19 +1051,19 @@ export default function App() {
                   setActiveTab('rider');
                   setIsOnboardingMode(false);
                   try {
-                    localStorage.setItem('reflex_active_rider', JSON.stringify(onboardingRider));
+                    localStorage.setItem('KASI_active_rider', JSON.stringify(onboardingRider));
                   } catch (e) {}
-                  showNotification(`👋 Welcome ${onboardingRider.name}! You are ready to receive deliveries.`);
+                  showNotification(`ðŸ‘‹ Welcome ${onboardingRider.name}! You are ready to receive deliveries.`);
                 }}
               >
-                🚀 Continue to Delivery Console →
+                ðŸš€ Continue to Delivery Console â†’
               </button>
             </div>
           )}
 
           {onboardingStatus === 'invalid' && (
             <div style={styles.onboardingInvalidBox}>
-              <div style={styles.invalidIconCircle}>❌</div>
+              <div style={styles.invalidIconCircle}>âŒ</div>
               <h2 style={styles.invalidTitle}>Invalid Invitation Link</h2>
               <p style={styles.invalidMessage}>
                 {onboardingErrorMsg || 'This rider invitation link is invalid or has expired. Please contact your fleet dispatcher for a fresh invite link.'}
@@ -1074,7 +1074,7 @@ export default function App() {
                   window.location.href = window.location.origin;
                 }}
               >
-                ← Return to Home
+                â† Return to Home
               </button>
             </div>
           )}
@@ -1083,7 +1083,7 @@ export default function App() {
     );
   }
 
-  // ─── IF OPENED VIA PHONE CAMERA QR SCAN REDIRECTION ───
+  // â”€â”€â”€ IF OPENED VIA PHONE CAMERA QR SCAN REDIRECTION â”€â”€â”€
   if (isUrlVerifyMode) {
     const assignedRider = urlDeliveryData?.riderName || 'Rider Brian Mutua';
     const assignedPhone = urlDeliveryData?.riderPhone || '0745678901';
@@ -1091,9 +1091,9 @@ export default function App() {
     return (
       <div style={styles.mobileVerifyContainer}>
         <div style={styles.mobileVerifyCard}>
-          <div style={styles.brandLogo}>⚡</div>
+          <div style={styles.brandLogo}>âš¡</div>
           <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#ffffff', margin: '8px 0 2px 0' }}>
-            REFLEX Verification Portal
+            KASI Verification Portal
           </h2>
           <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 'bold' }}>
             SECURITY VERIFICATION GATE
@@ -1115,30 +1115,30 @@ export default function App() {
             {/* ONLY ASSIGNED DRIVER DISPLAY */}
             <div style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '12px', padding: '12px', marginTop: '6px' }}>
               <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: '900', letterSpacing: '0.6px', display: 'block', marginBottom: '2px' }}>
-                🚴 ASSIGNED DELIVERY DRIVER
+                ðŸš´ ASSIGNED DELIVERY DRIVER
               </span>
               <strong style={{ fontSize: '15px', color: '#ffffff', display: 'block' }}>
                 {assignedRider}
               </strong>
               <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                📞 {assignedPhone} • Reflex Fleet Courier
+                ðŸ“ž {assignedPhone} â€¢ KASI Fleet Courier
               </span>
             </div>
 
             {urlDeliveryData && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
                 <p style={{ margin: 0, fontSize: '13px', color: '#fff' }}>
-                  <strong>👤 Recipient:</strong> {urlDeliveryData.customerName} ({urlDeliveryData.customerPhone})
+                  <strong>ðŸ‘¤ Recipient:</strong> {urlDeliveryData.customerName} ({urlDeliveryData.customerPhone})
                 </p>
                 <p style={{ margin: 0, fontSize: '13px', color: '#cbd5e1' }}>
-                  <strong>📦 Item:</strong> {urlDeliveryData.itemDescription}
+                  <strong>ðŸ“¦ Item:</strong> {urlDeliveryData.itemDescription}
                 </p>
                 <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
-                  <strong>📍 Destination:</strong> {urlDeliveryData.deliveryAddress}
+                  <strong>ðŸ“ Destination:</strong> {urlDeliveryData.deliveryAddress}
                 </p>
                 {urlDeliveryData.retailerName && (
                   <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
-                    <strong>🏪 Merchant:</strong> {urlDeliveryData.retailerName}
+                    <strong>ðŸª Merchant:</strong> {urlDeliveryData.retailerName}
                   </p>
                 )}
               </div>
@@ -1148,7 +1148,7 @@ export default function App() {
           {urlVerifyStatus === 'success' ? (
             <div style={styles.verifySuccessBox}>
               <div style={styles.celebrationCircle}>
-                <span style={{ fontSize: '32px', color: '#22c55e' }}>✓</span>
+                <span style={{ fontSize: '32px', color: '#22c55e' }}>âœ“</span>
               </div>
               <h3 style={{ fontSize: '18px', color: '#ffffff', margin: '8px 0 4px 0' }}>
                 QR Code Verified
@@ -1164,12 +1164,12 @@ export default function App() {
                 disabled={urlVerifyStatus === 'verifying'}
                 style={styles.mobileConfirmBtn}
               >
-                {urlVerifyStatus === 'verifying' ? '⏳ Verifying...' : '⚡ Verify QR Code & Confirm Delivery'}
+                {urlVerifyStatus === 'verifying' ? 'â³ Verifying...' : 'âš¡ Verify QR Code & Confirm Delivery'}
               </button>
 
               {urlVerifyStatus === 'error' && (
                 <div style={styles.errorBanner}>
-                  ⚠️ {urlVerifyMsg}
+                  âš ï¸ {urlVerifyMsg}
                 </div>
               )}
             </div>
@@ -1182,7 +1182,7 @@ export default function App() {
               window.location.href = window.location.origin;
             }}
           >
-            ← Return to Reflex Control Plane
+            â† Return to KASI Control Plane
           </a>
         </div>
       </div>
@@ -1234,13 +1234,13 @@ export default function App() {
       {/* Toast Notification */}
       {notification && <div style={styles.notificationToast}>{notification}</div>}
 
-      {/* ─── 1. FULL-SCREEN TOP NAVIGATION ─── */}
+      {/* â”€â”€â”€ 1. FULL-SCREEN TOP NAVIGATION â”€â”€â”€ */}
       <header className="app-navbar" style={styles.navbar}>
         <div style={styles.navLeft}>
-          <div style={styles.brandLogo}>⚡</div>
+          <div style={styles.brandLogo}>âš¡</div>
           <div>
-            <h1 style={styles.brandTitle}>REFLEX Logistics Network</h1>
-            <span style={styles.brandSubtitle}>Dispatcher · Retailer · Rider — Unified Control Plane</span>
+            <h1 style={styles.brandTitle}>KASI Logistics Network</h1>
+            <span style={styles.brandSubtitle}>Dispatcher Â· Retailer Â· Rider â€” Unified Control Plane</span>
           </div>
         </div>
 
@@ -1253,7 +1253,7 @@ export default function App() {
                 setRetailerSubTab('dispatches');
               }}
             >
-              🏪 Retailer Orders
+              ðŸª Retailer Orders
             </button>
             <button
               style={{ ...styles.segmentButton, ...(activeTab === 'retailer' && retailerSubTab === 'riders' ? styles.segmentActive : {}) }}
@@ -1262,19 +1262,19 @@ export default function App() {
                 setRetailerSubTab('riders');
               }}
             >
-              👥 My Hired Riders ({riders.length})
+              ðŸ‘¥ My Hired Riders ({riders.length})
             </button>
             <button
               style={{ ...styles.segmentButton, ...(activeTab === 'dispatcher' ? styles.segmentActive : {}) }}
               onClick={() => setActiveTab('dispatcher')}
             >
-              🎛️ Dispatcher Center
+              ðŸŽ›ï¸ Dispatcher Center
             </button>
             <button
               style={{ ...styles.segmentButton, ...(activeTab === 'rider' ? styles.segmentActive : {}) }}
               onClick={() => setActiveTab('rider')}
             >
-              🏍️ Rider PWA
+              ðŸï¸ Rider PWA
             </button>
           </div>
         </div>
@@ -1285,15 +1285,15 @@ export default function App() {
             <span style={styles.liveText}>Live</span>
           </div>
           <div style={styles.lastUpdatedTag}>
-            {loading ? 'Loading…' : `${deliveries.length} orders synced`}
+            {loading ? 'Loadingâ€¦' : `${deliveries.length} orders synced`}
           </div>
         </div>
       </header>
 
-      {/* ─── 2. FULL-SCREEN KPI SUMMARY BANNER ─── */}
+      {/* â”€â”€â”€ 2. FULL-SCREEN KPI SUMMARY BANNER â”€â”€â”€ */}
       <div className="app-kpi-container" style={styles.kpiContainer}>
         <div style={styles.kpiCard} onClick={() => setStatusFilter('ALL')}>
-          <div style={styles.kpiIcon}>📦</div>
+          <div style={styles.kpiIcon}>ðŸ“¦</div>
           <div>
             <span style={styles.kpiValue}>{totalCount}</span>
             <span style={styles.kpiLabel}>Total Orders</span>
@@ -1301,7 +1301,7 @@ export default function App() {
         </div>
 
         <div style={{ ...styles.kpiCard, borderColor: statusFilter === 'OPEN' ? '#fde047' : '#1e293b' }} onClick={() => setStatusFilter('OPEN')}>
-          <div style={{ ...styles.kpiIcon, color: '#fde047', backgroundColor: 'rgba(253, 224, 71, 0.12)' }}>⏳</div>
+          <div style={{ ...styles.kpiIcon, color: '#fde047', backgroundColor: 'rgba(253, 224, 71, 0.12)' }}>â³</div>
           <div>
             <span style={{ ...styles.kpiValue, color: '#fde047' }}>{pendingCount}</span>
             <span style={styles.kpiLabel}>Pending Pickup</span>
@@ -1309,7 +1309,7 @@ export default function App() {
         </div>
 
         <div style={{ ...styles.kpiCard, borderColor: statusFilter === 'ASSIGNED' ? '#a5b4fc' : '#1e293b' }} onClick={() => setStatusFilter('ASSIGNED')}>
-          <div style={{ ...styles.kpiIcon, color: '#a5b4fc', backgroundColor: 'rgba(165, 180, 252, 0.12)' }}>🚴</div>
+          <div style={{ ...styles.kpiIcon, color: '#a5b4fc', backgroundColor: 'rgba(165, 180, 252, 0.12)' }}>ðŸš´</div>
           <div>
             <span style={{ ...styles.kpiValue, color: '#a5b4fc' }}>{assignedCount}</span>
             <span style={styles.kpiLabel}>Assigned to Rider</span>
@@ -1317,7 +1317,7 @@ export default function App() {
         </div>
 
         <div style={{ ...styles.kpiCard, borderColor: statusFilter === 'PICKED_UP' ? '#38bdf8' : '#1e293b' }} onClick={() => setStatusFilter('PICKED_UP')}>
-          <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>🚚</div>
+          <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>ðŸšš</div>
           <div>
             <span style={{ ...styles.kpiValue, color: '#38bdf8' }}>{transitCount}</span>
             <span style={styles.kpiLabel}>In Transit</span>
@@ -1325,7 +1325,7 @@ export default function App() {
         </div>
 
         <div style={{ ...styles.kpiCard, borderColor: statusFilter === 'DELIVERED' ? '#34d399' : '#1e293b' }} onClick={() => setStatusFilter('DELIVERED')}>
-          <div style={{ ...styles.kpiIcon, color: '#34d399', backgroundColor: 'rgba(52, 211, 153, 0.12)' }}>✓</div>
+          <div style={{ ...styles.kpiIcon, color: '#34d399', backgroundColor: 'rgba(52, 211, 153, 0.12)' }}>âœ“</div>
           <div>
             <span style={{ ...styles.kpiValue, color: '#34d399' }}>{deliveredCount}</span>
             <span style={styles.kpiLabel}>Delivered Today</span>
@@ -1333,7 +1333,7 @@ export default function App() {
         </div>
 
         <div style={styles.kpiCard} onClick={() => setActiveTab('rider')}>
-          <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>👥</div>
+          <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>ðŸ‘¥</div>
           <div>
             <span style={styles.kpiValue}>{riders.length}</span>
             <span style={styles.kpiLabel}>Active Fleet Riders</span>
@@ -1341,16 +1341,16 @@ export default function App() {
         </div>
       </div>
 
-      {/* ─── 3. FULL-SCREEN WORKSPACE (TABS) ─── */}
+      {/* â”€â”€â”€ 3. FULL-SCREEN WORKSPACE (TABS) â”€â”€â”€ */}
       <main className="app-main-content" style={styles.mainContent}>
-        {/* ── TAB 1: DISPATCHER CONTROL CENTER ── */}
+        {/* â”€â”€ TAB 1: DISPATCHER CONTROL CENTER â”€â”€ */}
         {activeTab === 'dispatcher' && (
           <div style={styles.dispatcherSection}>
             {/* Control Center Header */}
             <div style={styles.hubToolbar}>
               <div style={styles.hubTitleGroup}>
                 <div style={{ ...styles.hubIconBadge, backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
-                  🎛️
+                  ðŸŽ›ï¸
                 </div>
                 <div>
                   <h2 style={styles.hubTitle}>DISPATCHER CONTROL CENTER</h2>
@@ -1366,13 +1366,13 @@ export default function App() {
                   onClick={fetchDeliveries}
                   disabled={loading}
                 >
-                  {loading ? '⏳ Syncing...' : '🔄 Refresh Queue'}
+                  {loading ? 'â³ Syncing...' : 'ðŸ”„ Refresh Queue'}
                 </button>
                 <button
                   style={styles.openNewDeliveryBtn}
                   onClick={() => setActiveTab('riders')}
                 >
-                  👥 Manage Fleet Riders ({riders.length})
+                  ðŸ‘¥ Manage Fleet Riders ({riders.length})
                 </button>
               </div>
             </div>
@@ -1389,7 +1389,7 @@ export default function App() {
                 onClick={() => setStatusFilter('OPEN')}
               >
                 <div style={{ ...styles.kpiIcon, color: '#fde047', backgroundColor: 'rgba(253, 224, 71, 0.12)' }}>
-                  ⏳
+                  â³
                 </div>
                 <div>
                   <span style={{ ...styles.kpiValue, color: '#fde047' }}>{pendingCount}</span>
@@ -1407,7 +1407,7 @@ export default function App() {
                 onClick={() => setStatusFilter('ASSIGNED')}
               >
                 <div style={{ ...styles.kpiIcon, color: '#a5b4fc', backgroundColor: 'rgba(165, 180, 252, 0.12)' }}>
-                  🚴
+                  ðŸš´
                 </div>
                 <div>
                   <span style={{ ...styles.kpiValue, color: '#a5b4fc' }}>{assignedCount}</span>
@@ -1425,7 +1425,7 @@ export default function App() {
                 onClick={() => setStatusFilter('PICKED_UP')}
               >
                 <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>
-                  🚚
+                  ðŸšš
                 </div>
                 <div>
                   <span style={{ ...styles.kpiValue, color: '#38bdf8' }}>{transitCount}</span>
@@ -1443,7 +1443,7 @@ export default function App() {
                 onClick={() => setStatusFilter('DELIVERED')}
               >
                 <div style={{ ...styles.kpiIcon, color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.12)' }}>
-                  ✓
+                  âœ“
                 </div>
                 <div>
                   <span style={{ ...styles.kpiValue, color: '#22c55e' }}>{deliveredCount}</span>
@@ -1465,7 +1465,7 @@ export default function App() {
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <input
                     type="text"
-                    placeholder="🔍 Search reference, merchant, recipient, item..."
+                    placeholder="ðŸ” Search reference, merchant, recipient, item..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     style={styles.tableSearchInput}
@@ -1504,7 +1504,7 @@ export default function App() {
                   </div>
                 ) : filteredDeliveries.length === 0 ? (
                   <div style={styles.emptyState}>
-                    <div style={styles.emptyIcon}>📦</div>
+                    <div style={styles.emptyIcon}>ðŸ“¦</div>
                     <p style={styles.emptyTitle}>No matching delivery dispatches found in this queue view</p>
                   </div>
                 ) : (
@@ -1527,13 +1527,13 @@ export default function App() {
                               {item.reference || `DEL-#${item.id}`}
                             </code>
                             <span style={styles.retailerBadge}>
-                              🏪 {item.retailerName || 'Kamau Electronics'}
+                              ðŸª {item.retailerName || 'Kamau Electronics'}
                             </span>
                           </div>
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             {item.qrVerified && (
-                              <span style={styles.pwaReadyBadge}>✓ QR VERIFIED</span>
+                              <span style={styles.pwaReadyBadge}>âœ“ QR VERIFIED</span>
                             )}
                             <span style={{ ...styles.badge, ...styles[`badge_${item.status}`] }}>
                               {item.status || 'OPEN'}
@@ -1617,7 +1617,7 @@ export default function App() {
                                     </span>
                                     {idx < 4 && (
                                       <span style={{ color: isPassed ? '#38bdf8' : '#334155', fontSize: '9px' }}>
-                                        ➔
+                                        âž”
                                       </span>
                                     )}
                                   </React.Fragment>
@@ -1631,14 +1631,14 @@ export default function App() {
                         <div style={styles.queueCardFooter} onClick={(e) => e.stopPropagation()}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{ fontSize: '11px', color: '#64748b' }}>
-                              🕒 {item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                              ðŸ•’ {item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
                             </span>
                             <button
                               type="button"
                               style={styles.viewRowBtn}
                               onClick={() => setInspectedWaybill(item)}
                             >
-                              📱 Show QR ↗
+                              ðŸ“± Show QR â†—
                             </button>
                           </div>
 
@@ -1652,12 +1652,12 @@ export default function App() {
                                   setSelectedRiderForAssignment('');
                                 }}
                               >
-                                🚴 Assign Rider ▼
+                                ðŸš´ Assign Rider â–¼
                               </button>
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <span style={styles.assignedRiderPill}>
-                                  🚴 {item.riderName || `Rider #${item.riderId}`}
+                                  ðŸš´ {item.riderName || `Rider #${item.riderId}`}
                                 </span>
                                 <button
                                   type="button"
@@ -1667,7 +1667,7 @@ export default function App() {
                                     setSelectedRiderForAssignment(String(item.riderId || ''));
                                   }}
                                 >
-                                  🔄 Reassign
+                                  ðŸ”„ Reassign
                                 </button>
                               </div>
                             )}
@@ -1682,13 +1682,13 @@ export default function App() {
           </div>
         )}
 
-        {/* ── TAB 2: RETAILER PORTAL (ORDERS & MY HIRED RIDERS) ── */}
+        {/* â”€â”€ TAB 2: RETAILER PORTAL (ORDERS & MY HIRED RIDERS) â”€â”€ */}
         {activeTab === 'retailer' && (
           <div style={styles.retailerPortalWrapper}>
             {/* Top Retailer Toolbar */}
             <div style={styles.retailerToolbar}>
               <div>
-                <h2 style={styles.retailerHubTitle}>🏪 Retailer Business Hub</h2>
+                <h2 style={styles.retailerHubTitle}>ðŸª Retailer Business Hub</h2>
                 <p style={styles.retailerHubDesc}>
                   Create customer deliveries, hire dedicated store couriers, generate PWA onboarding links, and audit live fulfillment.
                 </p>
@@ -1702,7 +1702,7 @@ export default function App() {
                     }}
                     onClick={() => setRetailerSubTab('dispatches')}
                   >
-                    📦 Orders &amp; Dispatches
+                    ðŸ“¦ Orders &amp; Dispatches
                   </button>
                   <button
                     style={{
@@ -1711,7 +1711,7 @@ export default function App() {
                     }}
                     onClick={() => setRetailerSubTab('riders')}
                   >
-                    👥 My Hired Riders ({riders.length})
+                    ðŸ‘¥ My Hired Riders ({riders.length})
                   </button>
                 </div>
 
@@ -1727,7 +1727,7 @@ export default function App() {
                       }
                     }}
                   >
-                    ✨ + New Delivery Request
+                    âœ¨ + New Delivery Request
                   </button>
                 ) : (
                   <button
@@ -1743,21 +1743,21 @@ export default function App() {
                       setIsRegisterRiderModalOpen(true);
                     }}
                   >
-                    ➕ + Hire New Rider for My Store
+                    âž• + Hire New Rider for My Store
                   </button>
                 )}
               </div>
             </div>
 
-            {/* ── SUB-TAB 1: ORDERS & DISPATCHES ── */}
+            {/* â”€â”€ SUB-TAB 1: ORDERS & DISPATCHES â”€â”€ */}
             {retailerSubTab === 'dispatches' && (
               <>
-                {/* ─── NEW DELIVERY REQUEST WORKBENCH ─── */}
+                {/* â”€â”€â”€ NEW DELIVERY REQUEST WORKBENCH â”€â”€â”€ */}
                 <div id="new-delivery-request-form" style={styles.newDeliveryContainer}>
                   {/* Header */}
                   <div style={styles.newDeliveryHeader}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={styles.newDeliveryIconBadge}>📦</div>
+                      <div style={styles.newDeliveryIconBadge}>ðŸ“¦</div>
                       <div>
                         <h2 style={styles.newDeliveryTitle}>New Delivery Request</h2>
                         <div style={styles.zoneRoutingIndicator}>
@@ -1791,14 +1791,14 @@ export default function App() {
                         }}
                         title="Clear entered details"
                       >
-                        🔄 Clear Form
+                        ðŸ”„ Clear Form
                       </button>
                     </div>
                   </div>
 
                   {/* Main Content: Left Form & Right Live Delivery Summary */}
                   <div style={styles.newDeliveryLayout}>
-                    {/* ─── LEFT: 10 FORM FIELDS ─── */}
+                    {/* â”€â”€â”€ LEFT: 10 FORM FIELDS â”€â”€â”€ */}
                     <form onSubmit={handleCreateDeliveryRequest} style={styles.newDeliveryForm}>
                       {/* Row 1: Customer Name & Phone */}
                       <div style={styles.formRow2}>
@@ -1817,7 +1817,7 @@ export default function App() {
                             placeholder="e.g. John / Amina Wanjiru"
                           />
                           {formErrors.customerName && (
-                            <span style={styles.fieldErrorText}>⚠️ {formErrors.customerName}</span>
+                            <span style={styles.fieldErrorText}>âš ï¸ {formErrors.customerName}</span>
                           )}
                         </div>
 
@@ -1836,7 +1836,7 @@ export default function App() {
                             placeholder="e.g. +254712345678 or 0712345678"
                           />
                           {formErrors.customerPhone && (
-                            <span style={styles.fieldErrorText}>⚠️ {formErrors.customerPhone}</span>
+                            <span style={styles.fieldErrorText}>âš ï¸ {formErrors.customerPhone}</span>
                           )}
                         </div>
                       </div>
@@ -1856,13 +1856,13 @@ export default function App() {
                             value={formData.zone}
                             onChange={(e) => handleInputChange('zone', e.target.value)}
                           >
-                            <option value="Westlands">Westlands (KES 250 • ~35m)</option>
-                            <option value="Kilimani">Kilimani / Kileleshwa (KES 200 • ~25m)</option>
-                            <option value="CBD">Nairobi CBD (KES 150 • ~20m)</option>
-                            <option value="Eastlands">Eastlands / Buruburu (KES 350 • ~50m)</option>
-                            <option value="Karen">Karen / Langata (KES 400 • ~60m)</option>
-                            <option value="Industrial Area">Industrial Area (KES 250 • ~30m)</option>
-                            <option value="Kasarani">Kasarani / Thika Rd (KES 350 • ~45m)</option>
+                            <option value="Westlands">Westlands (KES 250 â€¢ ~35m)</option>
+                            <option value="Kilimani">Kilimani / Kileleshwa (KES 200 â€¢ ~25m)</option>
+                            <option value="CBD">Nairobi CBD (KES 150 â€¢ ~20m)</option>
+                            <option value="Eastlands">Eastlands / Buruburu (KES 350 â€¢ ~50m)</option>
+                            <option value="Karen">Karen / Langata (KES 400 â€¢ ~60m)</option>
+                            <option value="Industrial Area">Industrial Area (KES 250 â€¢ ~30m)</option>
+                            <option value="Kasarani">Kasarani / Thika Rd (KES 350 â€¢ ~45m)</option>
                           </select>
                         </div>
 
@@ -1885,7 +1885,7 @@ export default function App() {
                                   }}
                                   onClick={() => handleInputChange('priority', p)}
                                 >
-                                  {p === 'Express' ? '⚡ Express' : p === 'Normal' ? '🚀 Normal' : '🕒 Scheduled'}
+                                  {p === 'Express' ? 'âš¡ Express' : p === 'Normal' ? 'ðŸš€ Normal' : 'ðŸ•’ Scheduled'}
                                 </button>
                               );
                             })}
@@ -1909,7 +1909,7 @@ export default function App() {
                           placeholder="Building, Street, Landmark, Floor or Office Number"
                         />
                         {formErrors.address && (
-                          <span style={styles.fieldErrorText}>⚠️ {formErrors.address}</span>
+                          <span style={styles.fieldErrorText}>âš ï¸ {formErrors.address}</span>
                         )}
                       </div>
 
@@ -1930,7 +1930,7 @@ export default function App() {
                             placeholder="e.g. HP ProBook 450 G8 / iPhone 15"
                           />
                           {formErrors.itemDescription && (
-                            <span style={styles.fieldErrorText}>⚠️ {formErrors.itemDescription}</span>
+                            <span style={styles.fieldErrorText}>âš ï¸ {formErrors.itemDescription}</span>
                           )}
                         </div>
 
@@ -2001,7 +2001,7 @@ export default function App() {
                           style={styles.submitDeliveryBtn}
                           disabled={isSubmittingDelivery}
                         >
-                          {isSubmittingDelivery ? 'Creating Delivery...' : '🚀 Submit & Generate QR Slip'}
+                          {isSubmittingDelivery ? 'Creating Delivery...' : 'ðŸš€ Submit & Generate QR Slip'}
                         </button>
                       </div>
                     </form>
@@ -2013,7 +2013,7 @@ export default function App() {
                           <span style={styles.summarySubTag}>REAL-TIME PREVIEW</span>
                           <h3 style={styles.summaryHeading}>Delivery Summary</h3>
                         </div>
-                        <span style={styles.summaryLiveTag}>● Live</span>
+                        <span style={styles.summaryLiveTag}>â— Live</span>
                       </div>
 
                       <div style={styles.summaryBody}>
@@ -2034,7 +2034,7 @@ export default function App() {
                         <div style={styles.summaryItem}>
                           <span style={styles.summaryLabel}>Zone</span>
                           <strong style={styles.summaryValue}>
-                            {formData.zone ? `📍 ${formData.zone}` : <em style={styles.emptyPlaceholder}>Not selected</em>}
+                            {formData.zone ? `ðŸ“ ${formData.zone}` : <em style={styles.emptyPlaceholder}>Not selected</em>}
                           </strong>
                         </div>
 
@@ -2078,9 +2078,9 @@ export default function App() {
                         )}
 
                         <div style={styles.autoRouteFeatureBox}>
-                          <span style={{ fontSize: '13px', color: '#22c55e' }}>✓</span>
+                          <span style={{ fontSize: '13px', color: '#22c55e' }}>âœ“</span>
                           <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
-                            Automatic zone pricing &amp; immediate <strong>📦 OPEN</strong> database entry upon submission.
+                            Automatic zone pricing &amp; immediate <strong>ðŸ“¦ OPEN</strong> database entry upon submission.
                           </span>
                         </div>
                       </div>
@@ -2088,7 +2088,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* ─── RETAILER LIVE AUDIT LEDGER ─── */}
+                {/* â”€â”€â”€ RETAILER LIVE AUDIT LEDGER â”€â”€â”€ */}
                 <div style={styles.retailerLedgerCard}>
                   <div style={styles.feedHeader}>
                     <div>
@@ -2163,7 +2163,7 @@ export default function App() {
                               <td style={styles.td}>{item.deliveryAddress}</td>
                               <td style={styles.td}>
                                 {item.riderName ? (
-                                  <span style={styles.riderPill}>🚴 {item.riderName}</span>
+                                  <span style={styles.riderPill}>ðŸš´ {item.riderName}</span>
                                 ) : (
                                   <em style={{ color: '#64748b' }}>Pending Assignment</em>
                                 )}
@@ -2174,7 +2174,7 @@ export default function App() {
                                     {item.qrToken.slice(0, 18)}...
                                   </span>
                                 ) : (
-                                  <span style={{ color: '#64748b' }}>—</span>
+                                  <span style={{ color: '#64748b' }}>â€”</span>
                                 )}
                               </td>
                               <td style={styles.td}>
@@ -2190,7 +2190,7 @@ export default function App() {
                                     setInspectedWaybill(item);
                                   }}
                                 >
-                                  📱 Show QR ↗
+                                  ðŸ“± Show QR â†—
                                 </button>
                               </td>
                             </tr>
@@ -2203,15 +2203,15 @@ export default function App() {
               </>
             )}
 
-            {/* ── SUB-TAB 2: MY HIRED FLEET COURIERS ── */}
+            {/* â”€â”€ SUB-TAB 2: MY HIRED FLEET COURIERS â”€â”€ */}
             {retailerSubTab === 'riders' && (
               <div style={styles.retailerSection}>
                 {/* Top Toolbar */}
                 <div style={styles.hubToolbar}>
                   <div style={styles.hubTitleGroup}>
-                    <div style={styles.hubIconBadge}>👥</div>
+                    <div style={styles.hubIconBadge}>ðŸ‘¥</div>
                     <div>
-                      <h2 style={styles.hubTitle}>🏪 My Hired Couriers &amp; Store Fleet</h2>
+                      <h2 style={styles.hubTitle}>ðŸª My Hired Couriers &amp; Store Fleet</h2>
                       <span style={styles.hubSubtitle}>
                         Hire and manage dedicated delivery riders for your store, generate personalized PWA onboarding links, and track fulfillment status
                       </span>
@@ -2232,7 +2232,7 @@ export default function App() {
                         setIsRegisterRiderModalOpen(true);
                       }}
                     >
-                      <span style={{ fontSize: '15px' }}>➕</span> Hire New Rider for My Store
+                      <span style={{ fontSize: '15px' }}>âž•</span> Hire New Rider for My Store
                     </button>
                   </div>
                 </div>
@@ -2240,7 +2240,7 @@ export default function App() {
                 {/* Riders Fleet Summary Cards */}
                 <div style={styles.kpiContainer}>
                   <div style={{ ...styles.kpiCard, flex: 1 }}>
-                    <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>🏍️</div>
+                    <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>ðŸï¸</div>
                     <div>
                       <span style={{ ...styles.kpiValue, color: '#38bdf8' }}>{riders.length}</span>
                       <span style={styles.kpiLabel}>Total Hired Couriers</span>
@@ -2248,7 +2248,7 @@ export default function App() {
                   </div>
 
                   <div style={{ ...styles.kpiCard, flex: 1, borderColor: '#22c55e' }}>
-                    <div style={{ ...styles.kpiIcon, color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.12)' }}>✓</div>
+                    <div style={{ ...styles.kpiIcon, color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.12)' }}>âœ“</div>
                     <div>
                       <span style={{ ...styles.kpiValue, color: '#22c55e' }}>
                         {riders.filter((r) => r.pwaStatus === 'READY' || r.status === 'ACTIVE').length}
@@ -2258,7 +2258,7 @@ export default function App() {
                   </div>
 
                   <div style={{ ...styles.kpiCard, flex: 1, borderColor: '#f59e0b' }}>
-                    <div style={{ ...styles.kpiIcon, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>📩</div>
+                    <div style={{ ...styles.kpiIcon, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>ðŸ“©</div>
                     <div>
                       <span style={{ ...styles.kpiValue, color: '#f59e0b' }}>
                         {riders.filter((r) => r.pwaStatus === 'LINK_SENT' || r.pwaStatus === 'PENDING').length}
@@ -2274,14 +2274,14 @@ export default function App() {
                     <div>
                       <h3 style={styles.tableTitle}>Authorized Store Fleet Roster</h3>
                       <span style={styles.tableSubtitle}>
-                        Each hired rider receives a permanent personalized token link to access your store deliveries in the REFLEX Rider PWA
+                        Each hired rider receives a permanent personalized token link to access your store deliveries in the KASI Rider PWA
                       </span>
                     </div>
 
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                       <input
                         type="text"
-                        placeholder="🔍 Search courier name, phone, code..."
+                        placeholder="ðŸ” Search courier name, phone, code..."
                         value={riderSearchTerm}
                         onChange={(e) => setRiderSearchTerm(e.target.value)}
                         style={styles.tableSearchInput}
@@ -2373,10 +2373,10 @@ export default function App() {
                                   <strong style={{ color: '#38bdf8', fontSize: '13px' }}>{rider.phone}</strong>
                                 </td>
                                 <td style={styles.td}>
-                                  <span style={{ color: '#94a3b8', fontSize: '12.5px' }}>{rider.email || '—'}</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '12.5px' }}>{rider.email || 'â€”'}</span>
                                 </td>
                                 <td style={styles.td}>
-                                  <span style={{ color: '#cbd5e1', fontSize: '12.5px' }}>📍 {rider.hub || 'Kamau Electronics (Westlands)'}</span>
+                                  <span style={{ color: '#cbd5e1', fontSize: '12.5px' }}>ðŸ“ {rider.hub || 'Kamau Electronics (Westlands)'}</span>
                                 </td>
                                 <td style={styles.td}>
                                   <span
@@ -2390,9 +2390,9 @@ export default function App() {
                                 </td>
                                 <td style={styles.td}>
                                   {rider.pwaStatus === 'READY' || rider.status === 'ACTIVE' ? (
-                                    <span style={styles.pwaReadyBadge}>✓ READY / ACTIVE</span>
+                                    <span style={styles.pwaReadyBadge}>âœ“ READY / ACTIVE</span>
                                   ) : (
-                                    <span style={styles.pwaPendingBadge}>📩 INVITE SENT</span>
+                                    <span style={styles.pwaPendingBadge}>ðŸ“© INVITE SENT</span>
                                   )}
                                 </td>
                                 <td style={styles.td}>
@@ -2402,14 +2402,14 @@ export default function App() {
                                       onClick={() => handleCopyPwaLink(onboardingLink)}
                                       title="Copy personal PWA access link"
                                     >
-                                      📋 Copy Link
+                                      ðŸ“‹ Copy Link
                                     </button>
                                     <button
                                       style={styles.actionBtnShare}
                                       onClick={() => handleSharePwaLink(onboardingLink, rider)}
                                       title="Share via WhatsApp or SMS"
                                     >
-                                      📱 Share
+                                      ðŸ“± Share
                                     </button>
                                     <button
                                       style={styles.actionBtnGhost}
@@ -2417,7 +2417,7 @@ export default function App() {
                                       disabled={isRegenerating}
                                       title="Invalidate old token and issue fresh link"
                                     >
-                                      {isRegenerating ? '⏳' : '🔄'}
+                                      {isRegenerating ? 'â³' : 'ðŸ”„'}
                                     </button>
                                   </div>
                                 </td>
@@ -2433,13 +2433,13 @@ export default function App() {
           </div>
         )}
 
-        {/* ── TAB 2.5: FLEET RIDERS MANAGEMENT ── */}
+        {/* â”€â”€ TAB 2.5: FLEET RIDERS MANAGEMENT â”€â”€ */}
         {activeTab === 'riders' && (
           <div style={styles.retailerSection}>
             {/* Top Toolbar */}
             <div style={styles.hubToolbar}>
               <div style={styles.hubTitleGroup}>
-                <div style={styles.hubIconBadge}>👥</div>
+                <div style={styles.hubIconBadge}>ðŸ‘¥</div>
                 <div>
                   <h2 style={styles.hubTitle}>Fleet Riders &amp; Couriers</h2>
                   <span style={styles.hubSubtitle}>
@@ -2457,7 +2457,7 @@ export default function App() {
                     setIsRegisterRiderModalOpen(true);
                   }}
                 >
-                  <span style={{ fontSize: '15px' }}>➕</span> Register New Rider
+                  <span style={{ fontSize: '15px' }}>âž•</span> Register New Rider
                 </button>
               </div>
             </div>
@@ -2465,7 +2465,7 @@ export default function App() {
             {/* Riders Fleet Summary Cards */}
             <div style={styles.kpiContainer}>
               <div style={{ ...styles.kpiCard, flex: 1 }}>
-                <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>🏍️</div>
+                <div style={{ ...styles.kpiIcon, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)' }}>ðŸï¸</div>
                 <div>
                   <span style={{ ...styles.kpiValue, color: '#38bdf8' }}>{riders.length}</span>
                   <span style={styles.kpiLabel}>Total Registered Riders</span>
@@ -2473,7 +2473,7 @@ export default function App() {
               </div>
 
               <div style={{ ...styles.kpiCard, flex: 1, borderColor: '#22c55e' }}>
-                <div style={{ ...styles.kpiIcon, color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.12)' }}>✓</div>
+                <div style={{ ...styles.kpiIcon, color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.12)' }}>âœ“</div>
                 <div>
                   <span style={{ ...styles.kpiValue, color: '#22c55e' }}>
                     {riders.filter((r) => r.pwaStatus === 'READY' || r.status === 'ACTIVE').length}
@@ -2483,7 +2483,7 @@ export default function App() {
               </div>
 
               <div style={{ ...styles.kpiCard, flex: 1, borderColor: '#f59e0b' }}>
-                <div style={{ ...styles.kpiIcon, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>📩</div>
+                <div style={{ ...styles.kpiIcon, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>ðŸ“©</div>
                 <div>
                   <span style={{ ...styles.kpiValue, color: '#f59e0b' }}>
                     {riders.filter((r) => r.pwaStatus === 'LINK_SENT' || r.pwaStatus === 'PENDING').length}
@@ -2499,14 +2499,14 @@ export default function App() {
                 <div>
                   <h3 style={styles.tableTitle}>Authorized Fleet Couriers</h3>
                   <span style={styles.tableSubtitle}>
-                    Each courier has a permanent personalized onboarding token link into the REFLEX Rider PWA
+                    Each courier has a permanent personalized onboarding token link into the KASI Rider PWA
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <input
                     type="text"
-                    placeholder="🔍 Search courier name, phone, code..."
+                    placeholder="ðŸ” Search courier name, phone, code..."
                     value={riderSearchTerm}
                     onChange={(e) => setRiderSearchTerm(e.target.value)}
                     style={styles.tableSearchInput}
@@ -2598,10 +2598,10 @@ export default function App() {
                               <strong style={{ color: '#38bdf8', fontSize: '13px' }}>{rider.phone}</strong>
                             </td>
                             <td style={styles.td}>
-                              <span style={{ color: '#94a3b8', fontSize: '12.5px' }}>{rider.email || '—'}</span>
+                              <span style={{ color: '#94a3b8', fontSize: '12.5px' }}>{rider.email || 'â€”'}</span>
                             </td>
                             <td style={styles.td}>
-                              <span style={{ color: '#cbd5e1', fontSize: '12.5px' }}>📍 {rider.hub || 'Nairobi Central'}</span>
+                              <span style={{ color: '#cbd5e1', fontSize: '12.5px' }}>ðŸ“ {rider.hub || 'Nairobi Central'}</span>
                             </td>
                             <td style={styles.td}>
                               <span
@@ -2617,9 +2617,9 @@ export default function App() {
                             </td>
                             <td style={styles.td}>
                               {rider.pwaStatus === 'READY' || rider.status === 'ACTIVE' ? (
-                                <span style={styles.pwaReadyBadge}>✓ PWA Ready</span>
+                                <span style={styles.pwaReadyBadge}>âœ“ PWA Ready</span>
                               ) : (
-                                <span style={styles.pwaPendingBadge}>📩 Invite Sent</span>
+                                <span style={styles.pwaPendingBadge}>ðŸ“© Invite Sent</span>
                               )}
                             </td>
                             <td style={styles.td}>
@@ -2629,14 +2629,14 @@ export default function App() {
                                   title="Copy Rider PWA Access Link"
                                   onClick={() => handleCopyPwaLink(onboardingLink, rider.name)}
                                 >
-                                  📋 Copy Link
+                                  ðŸ“‹ Copy Link
                                 </button>
                                 <button
                                   style={styles.actionBtnShare}
                                   title="Share link via WhatsApp / SMS"
                                   onClick={() => handleSharePwaLink(onboardingLink, rider)}
                                 >
-                                  📱 Share
+                                  ðŸ“± Share
                                 </button>
                                 <button
                                   style={styles.actionBtnGhost}
@@ -2644,7 +2644,7 @@ export default function App() {
                                   disabled={isRegenerating}
                                   onClick={() => handleRegenerateRiderLink(rider.id)}
                                 >
-                                  {isRegenerating ? '⏳' : '🔄 Refresh'}
+                                  {isRegenerating ? 'â³' : 'ðŸ”„ Refresh'}
                                 </button>
                               </div>
                             </td>
@@ -2658,7 +2658,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ── TAB 3: FULL-SCREEN REFLEX RIDER PORTAL ── */}
+        {/* â”€â”€ TAB 3: FULL-SCREEN KASI RIDER PORTAL â”€â”€ */}
         {activeTab === 'rider' && (
           <div style={styles.riderPortalWrapper}>
             {!selectedRiderDelivery ? (
@@ -2675,7 +2675,7 @@ export default function App() {
                       <h2 style={styles.riderProfileName}>{getRiderName(activeRiderId)}</h2>
                     </div>
                     <button style={styles.switchRiderBtn}>
-                      Switch Rider Profile ▾
+                      Switch Rider Profile â–¾
                     </button>
                   </div>
 
@@ -2699,7 +2699,7 @@ export default function App() {
                 {riderTasks.some(d => d.status === 'PICKED_UP') && (
                   <div style={styles.missionBanner}>
                     <div>
-                      <span style={styles.missionTag}>🚴 ACTIVE IN-TRANSIT MISSION</span>
+                      <span style={styles.missionTag}>ðŸš´ ACTIVE IN-TRANSIT MISSION</span>
                       <h3 style={styles.missionTitle}>
                         {riderTasks.find(d => d.status === 'PICKED_UP')?.reference || 'DEL'}: {riderTasks.find(d => d.status === 'PICKED_UP')?.deliveryAddress}
                       </h3>
@@ -2709,7 +2709,7 @@ export default function App() {
                       onClick={() => setSelectedRiderDelivery(riderTasks.find(d => d.status === 'PICKED_UP'))}
                       style={styles.resumeMissionBtn}
                     >
-                      Resume Dropoff →
+                      Resume Dropoff â†’
                     </button>
                   </div>
                 )}
@@ -2722,7 +2722,7 @@ export default function App() {
 
                   {riderTasks.length === 0 ? (
                     <div style={styles.emptyState}>
-                      <div style={styles.emptyIcon}>📦</div>
+                      <div style={styles.emptyIcon}>ðŸ“¦</div>
                       <p style={styles.emptyTitle}>No active delivery tasks assigned to {getRiderName(activeRiderId)}</p>
                       <p style={styles.emptySubtitle}>Dispatch a new order from the Dispatcher Console and assign it to this rider.</p>
                     </div>
@@ -2741,9 +2741,9 @@ export default function App() {
                           </div>
 
                           <div style={styles.taskCardContent}>
-                            <p style={styles.taskItem}>📦 <strong>{delivery.itemDescription}</strong></p>
-                            <p style={styles.taskCust}>👤 {delivery.customerName} ({delivery.customerPhone})</p>
-                            <p style={styles.taskDest}>📍 {delivery.deliveryAddress}</p>
+                            <p style={styles.taskItem}>ðŸ“¦ <strong>{delivery.itemDescription}</strong></p>
+                            <p style={styles.taskCust}>ðŸ‘¤ {delivery.customerName} ({delivery.customerPhone})</p>
+                            <p style={styles.taskDest}>ðŸ“ {delivery.deliveryAddress}</p>
                           </div>
 
                           <div style={styles.taskCardActions} onClick={(e) => e.stopPropagation()}>
@@ -2755,17 +2755,17 @@ export default function App() {
                                 }}
                                 style={styles.primaryActionBtn}
                               >
-                                Confirm Pickup →
+                                Confirm Pickup â†’
                               </button>
                             ) : delivery.status === 'PICKED_UP' ? (
                               <button
                                 onClick={() => setSelectedRiderDelivery(delivery)}
                                 style={{ ...styles.primaryActionBtn, backgroundColor: '#0284c7' }}
                               >
-                                In-Transit Dropoff →
+                                In-Transit Dropoff â†’
                               </button>
                             ) : (
-                              <span style={styles.completedPill}>✓ Delivered</span>
+                              <span style={styles.completedPill}>âœ“ Delivered</span>
                             )}
                           </div>
                         </div>
@@ -2779,7 +2779,7 @@ export default function App() {
               <div style={styles.activeMissionScreen}>
                 <div style={styles.missionNavBar}>
                   <button onClick={() => setSelectedRiderDelivery(null)} style={styles.backBtn}>
-                    ← Back to Tasks
+                    â† Back to Tasks
                   </button>
                   <div style={styles.missionTitleCenter}>
                     <span style={styles.missionNavTag}>IN-TRANSIT MISSION</span>
@@ -2802,7 +2802,7 @@ export default function App() {
                         rel="noopener noreferrer"
                         style={styles.navGoogleBtn}
                       >
-                        🗺️ Start Google Maps Navigation
+                        ðŸ—ºï¸ Start Google Maps Navigation
                       </a>
                     </div>
 
@@ -2811,11 +2811,11 @@ export default function App() {
                         <div>
                           <span style={styles.cardLabel}>CUSTOMER RECIPIENT</span>
                           <strong style={styles.custNameBig}>{selectedRiderDelivery.customerName}</strong>
-                          <p style={styles.custPhoneText}>📞 {selectedRiderDelivery.customerPhone}</p>
+                          <p style={styles.custPhoneText}>ðŸ“ž {selectedRiderDelivery.customerPhone}</p>
                         </div>
                         {selectedRiderDelivery.customerPhone && (
                           <a href={`tel:${selectedRiderDelivery.customerPhone}`} style={styles.callBigBtn}>
-                            📞 Call Recipient
+                            ðŸ“ž Call Recipient
                           </a>
                         )}
                       </div>
@@ -2851,13 +2851,13 @@ export default function App() {
                         }}
                       >
                         <div style={{ width: '50px', height: '50px', borderRadius: '14px', backgroundColor: (verifiedQRToken || selectedRiderDelivery.qrVerified) ? '#16a34a' : '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', color: '#fff' }}>
-                          {(verifiedQRToken || selectedRiderDelivery.qrVerified) ? '✓' : '📱'}
+                          {(verifiedQRToken || selectedRiderDelivery.qrVerified) ? 'âœ“' : 'ðŸ“±'}
                         </div>
                         <strong style={{ fontSize: '15px', color: '#fff', textAlign: 'center' }}>
                           {(verifiedQRToken || selectedRiderDelivery.qrVerified) ? 'QR Code Verified' : 'Tap to Show Customer QR Barcode'}
                         </strong>
                         <span style={{ fontSize: '12px', color: (verifiedQRToken || selectedRiderDelivery.qrVerified) ? '#4ade80' : '#94a3b8' }}>
-                          {(verifiedQRToken || selectedRiderDelivery.qrVerified) ? '✓ Verified — Ready to Complete' : 'Customer scans with phone or tap to validate'}
+                          {(verifiedQRToken || selectedRiderDelivery.qrVerified) ? 'âœ“ Verified â€” Ready to Complete' : 'Customer scans with phone or tap to validate'}
                         </span>
                       </div>
 
@@ -2872,7 +2872,7 @@ export default function App() {
                           marginTop: '16px'
                         }}
                       >
-                        {isCompletingDelivery ? 'Completing...' : '✓ COMPLETE & FINALIZE DELIVERY'}
+                        {isCompletingDelivery ? 'Completing...' : 'âœ“ COMPLETE & FINALIZE DELIVERY'}
                       </button>
                     </div>
                   </div>
@@ -2883,7 +2883,7 @@ export default function App() {
         )}
       </main>
 
-      {/* ─── MODALS ─── */}
+      {/* â”€â”€â”€ MODALS â”€â”€â”€ */}
 
       {/* 1. Pickup Confirmation Modal */}
       {isPickupModalOpen && selectedRiderDelivery && (
@@ -2894,7 +2894,7 @@ export default function App() {
                 <span style={styles.modalSubTag}>CONFIRM PICKUP</span>
                 <h3 style={styles.modalTitle}>{selectedRiderDelivery.reference || `#${selectedRiderDelivery.id}`}</h3>
               </div>
-              <button onClick={() => setIsPickupModalOpen(false)} style={styles.modalCloseBtn}>✕</button>
+              <button onClick={() => setIsPickupModalOpen(false)} style={styles.modalCloseBtn}>âœ•</button>
             </div>
 
             <div style={styles.modalBody}>
@@ -2906,11 +2906,11 @@ export default function App() {
 
               <div style={styles.modalBlock}>
                 <span style={styles.modalLabel}>DESTINATION</span>
-                <p style={styles.modalValText}>📍 {selectedRiderDelivery.deliveryAddress}</p>
+                <p style={styles.modalValText}>ðŸ“ {selectedRiderDelivery.deliveryAddress}</p>
               </div>
 
               <div style={styles.checklistRow}>
-                <span style={{ color: '#38bdf8', fontSize: '18px' }}>✓</span>
+                <span style={{ color: '#38bdf8', fontSize: '18px' }}>âœ“</span>
                 <span style={{ fontSize: '13px', color: '#f1f5f9' }}>
                   Package inspected and waybill reference confirmed for transit.
                 </span>
@@ -2922,7 +2922,7 @@ export default function App() {
                 onClick={() => handleConfirmPickup(selectedRiderDelivery)}
                 style={styles.modalDoneBtn}
               >
-                Confirm Pickup & Start Transit →
+                Confirm Pickup & Start Transit â†’
               </button>
             </div>
           </div>
@@ -2936,9 +2936,9 @@ export default function App() {
             <div style={styles.modalHeader}>
               <div>
                 <span style={styles.modalSubTag}>SECURITY VERIFICATION GATE</span>
-                <h3 style={styles.modalTitle}>📱 Customer Waybill QR Barcode</h3>
+                <h3 style={styles.modalTitle}>ðŸ“± Customer Waybill QR Barcode</h3>
               </div>
-              <button onClick={() => setIsQRModalOpen(false)} style={styles.modalCloseBtn}>✕</button>
+              <button onClick={() => setIsQRModalOpen(false)} style={styles.modalCloseBtn}>âœ•</button>
             </div>
 
             <div style={styles.modalBody}>
@@ -2970,7 +2970,7 @@ export default function App() {
                     rel="noopener noreferrer"
                     style={styles.testDirectLinkBtn}
                   >
-                    🔗 Open Verification Link in Browser ↗
+                    ðŸ”— Open Verification Link in Browser â†—
                   </a>
 
                   <button
@@ -2978,7 +2978,7 @@ export default function App() {
                     disabled={isVerifyingQR}
                     style={styles.quickValidateBtn}
                   >
-                    {isVerifyingQR ? '⏳ Verifying...' : '✓ 1-Tap Verify QR Code'}
+                    {isVerifyingQR ? 'â³ Verifying...' : 'âœ“ 1-Tap Verify QR Code'}
                   </button>
                 </div>
               </div>
@@ -2994,7 +2994,7 @@ export default function App() {
         <div style={styles.modalOverlay} onClick={() => setIsSummaryModalOpen(false)}>
           <div style={{ ...styles.modalCard, textAlign: 'center', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
             <div style={styles.celebrationCircle}>
-              <span style={{ fontSize: '36px', color: '#22c55e' }}>✓</span>
+              <span style={{ fontSize: '36px', color: '#22c55e' }}>âœ“</span>
             </div>
             <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#ffffff', margin: '10px 0 4px 0' }}>Delivery Completed!</h2>
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 16px 0' }}>
@@ -3012,12 +3012,12 @@ export default function App() {
               </div>
               <div style={styles.summaryRow}>
                 <span style={styles.modalLabel}>Proof Verification:</span>
-                <strong style={{ color: '#4ade80' }}>✓ Live Verified</strong>
+                <strong style={{ color: '#4ade80' }}>âœ“ Live Verified</strong>
               </div>
             </div>
 
             <button onClick={() => setIsSummaryModalOpen(false)} style={styles.modalDoneBtn}>
-              Ready for Next Order →
+              Ready for Next Order â†’
             </button>
           </div>
         </div>
@@ -3032,7 +3032,7 @@ export default function App() {
                 <span style={styles.modalSubTag}>FLEET ROSTER</span>
                 <h3 style={styles.modalTitle}>Switch Active Rider</h3>
               </div>
-              <button onClick={() => setIsRiderSwitcherOpen(false)} style={styles.modalCloseBtn}>✕</button>
+              <button onClick={() => setIsRiderSwitcherOpen(false)} style={styles.modalCloseBtn}>âœ•</button>
             </div>
 
             <div style={styles.modalBody}>
@@ -3060,7 +3060,7 @@ export default function App() {
                     <div style={styles.riderAvatarMini}>{r.name.slice(0, 1)}</div>
                     <div style={{ flex: 1 }}>
                       <strong style={{ fontSize: '14px', color: '#fff', display: 'block' }}>{r.name}</strong>
-                      <span style={{ fontSize: '12px', color: '#94a3b8' }}>{r.phone} • {r.hub}</span>
+                      <span style={{ fontSize: '12px', color: '#94a3b8' }}>{r.phone} â€¢ {r.hub}</span>
                     </div>
                     {isSelected && <span style={styles.activeTag}>ACTIVE</span>}
                   </div>
@@ -3080,7 +3080,7 @@ export default function App() {
                 <span style={styles.modalSubTag}>WAYBILL RECORD AUDIT</span>
                 <h3 style={styles.modalTitle}>{inspectedWaybill.reference || `#${inspectedWaybill.id}`}</h3>
               </div>
-              <button onClick={() => setInspectedWaybill(null)} style={styles.modalCloseBtn}>✕</button>
+              <button onClick={() => setInspectedWaybill(null)} style={styles.modalCloseBtn}>âœ•</button>
             </div>
 
             <div style={styles.modalBody}>
@@ -3088,12 +3088,12 @@ export default function App() {
                 <span style={{ ...styles.badge, ...styles[`badge_${inspectedWaybill.status}`] }}>
                   Status: {inspectedWaybill.status}
                 </span>
-                {inspectedWaybill.qrVerified ? <span style={styles.verifiedPill}>✓ QR Verified</span> : null}
+                {inspectedWaybill.qrVerified ? <span style={styles.verifiedPill}>âœ“ QR Verified</span> : null}
               </div>
 
               {/* Visual Scannable QR Code Barcode for Phone Redirection */}
               <div style={{ backgroundColor: '#0f172a', borderRadius: '16px', padding: '16px', border: '1px solid #334155', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                <span style={styles.modalLabel}>📱 CUSTOMER QR BARCODE (SCAN WITH PHONE CAMERA)</span>
+                <span style={styles.modalLabel}>ðŸ“± CUSTOMER QR BARCODE (SCAN WITH PHONE CAMERA)</span>
                 <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <QRCodeSVG
                     value={getVerificationUrl(inspectedWaybill)}
@@ -3121,13 +3121,13 @@ export default function App() {
                 <div style={styles.modalBlock}>
                   <span style={styles.modalLabel}>Customer Recipient</span>
                   <strong style={styles.modalVal}>{inspectedWaybill.customerName}</strong>
-                  <span style={styles.modalSubVal}>📞 {inspectedWaybill.customerPhone}</span>
+                  <span style={styles.modalSubVal}>ðŸ“ž {inspectedWaybill.customerPhone}</span>
                 </div>
 
                 <div style={styles.modalBlock}>
                   <span style={styles.modalLabel}>Merchant Retailer</span>
                   <strong style={styles.modalVal}>{inspectedWaybill.retailerName || 'ElectroShop'}</strong>
-                  <span style={styles.modalSubVal}>{inspectedWaybill.retailerEmail || 'merchant@reflex.co.ke'}</span>
+                  <span style={styles.modalSubVal}>{inspectedWaybill.retailerEmail || 'merchant@KASI.co.ke'}</span>
                 </div>
               </div>
 
@@ -3144,7 +3144,7 @@ export default function App() {
               <div style={styles.modalBlock}>
                 <span style={styles.modalLabel}>Assigned Courier / Rider</span>
                 <p style={styles.modalValText}>
-                  {inspectedWaybill.riderName ? `🚴 ${inspectedWaybill.riderName}` : 'Not yet assigned'}
+                  {inspectedWaybill.riderName ? `ðŸš´ ${inspectedWaybill.riderName}` : 'Not yet assigned'}
                 </p>
               </div>
             </div>
@@ -3165,16 +3165,16 @@ export default function App() {
             <div style={styles.modalHeader}>
               <div>
                 <span style={styles.modalSubTag}>OFFICIAL DELIVERY WAYBILL SLIP</span>
-                <h3 style={styles.modalTitle}>📦 Waybill &amp; QR Slip Generated</h3>
+                <h3 style={styles.modalTitle}>ðŸ“¦ Waybill &amp; QR Slip Generated</h3>
               </div>
-              <button onClick={() => setCreatedDeliverySlip(null)} style={styles.modalCloseBtn}>✕</button>
+              <button onClick={() => setCreatedDeliverySlip(null)} style={styles.modalCloseBtn}>âœ•</button>
             </div>
 
             <div style={styles.modalBody}>
               {/* Status Banner */}
               <div style={styles.qrSlipStatusBanner}>
                 <span style={{ fontSize: '13px', fontWeight: '900', color: '#22c55e' }}>
-                  📦 STATUS: OPEN — RECORDED IN RAILWAY DATABASE
+                  ðŸ“¦ STATUS: OPEN â€” RECORDED IN RAILWAY DATABASE
                 </span>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>
                   Ready for Dispatcher Fleet Rider Assignment
@@ -3206,12 +3206,12 @@ export default function App() {
                 <div style={styles.modalBlock}>
                   <span style={styles.modalLabel}>Customer Recipient</span>
                   <strong style={styles.modalVal}>{createdDeliverySlip.customerName}</strong>
-                  <span style={styles.modalSubVal}>📞 {createdDeliverySlip.customerPhone}</span>
+                  <span style={styles.modalSubVal}>ðŸ“ž {createdDeliverySlip.customerPhone}</span>
                 </div>
 
                 <div style={styles.modalBlock}>
                   <span style={styles.modalLabel}>Delivery Zone &amp; Priority</span>
-                  <strong style={styles.modalVal}>📍 {createdDeliverySlip.zone || 'Westlands'}</strong>
+                  <strong style={styles.modalVal}>ðŸ“ {createdDeliverySlip.zone || 'Westlands'}</strong>
                   <span style={styles.modalSubVal}>Priority: {createdDeliverySlip.priority || 'Normal'}</span>
                 </div>
               </div>
@@ -3240,7 +3240,7 @@ export default function App() {
                     KES {createdDeliverySlip.deliveryFee || '250'}
                   </strong>
                   <span style={{ fontSize: '11px', color: '#38bdf8' }}>
-                    ETA: {createdDeliverySlip.estimatedTime || '45–60 mins'}
+                    ETA: {createdDeliverySlip.estimatedTime || '45â€“60 mins'}
                   </span>
                 </div>
               </div>
@@ -3261,7 +3261,7 @@ export default function App() {
                 style={styles.printSlipBtn}
                 onClick={() => window.print()}
               >
-                🖨️ Print Delivery Slip
+                ðŸ–¨ï¸ Print Delivery Slip
               </button>
 
               <button
@@ -3273,7 +3273,7 @@ export default function App() {
                   if (ledgerEl) ledgerEl.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
-                ✓ Done &amp; View in Ledger
+                âœ“ Done &amp; View in Ledger
               </button>
             </div>
           </div>
@@ -3286,7 +3286,7 @@ export default function App() {
           <div style={{ ...styles.modalCard, maxWidth: '840px' }} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={styles.newDeliveryIconBadge}>📦</div>
+                <div style={styles.newDeliveryIconBadge}>ðŸ“¦</div>
                 <div>
                   <h3 style={styles.modalTitle}>New Delivery Request</h3>
                   <div style={styles.zoneRoutingIndicator}>
@@ -3297,7 +3297,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <button onClick={() => setIsNewDeliveryModalOpen(false)} style={styles.modalCloseBtn}>✕</button>
+              <button onClick={() => setIsNewDeliveryModalOpen(false)} style={styles.modalCloseBtn}>âœ•</button>
             </div>
 
             <div style={{ ...styles.modalBody, maxHeight: '80vh', overflowY: 'auto' }}>
@@ -3326,7 +3326,7 @@ export default function App() {
                         placeholder="e.g. John / Amina Wanjiru"
                       />
                       {formErrors.customerName && (
-                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerName}</span>
+                        <span style={styles.fieldErrorText}>âš ï¸ {formErrors.customerName}</span>
                       )}
                     </div>
 
@@ -3345,7 +3345,7 @@ export default function App() {
                         placeholder="e.g. +254712345678 or 0712345678"
                       />
                       {formErrors.customerPhone && (
-                        <span style={styles.fieldErrorText}>⚠️ {formErrors.customerPhone}</span>
+                        <span style={styles.fieldErrorText}>âš ï¸ {formErrors.customerPhone}</span>
                       )}
                     </div>
                   </div>
@@ -3366,12 +3366,12 @@ export default function App() {
                       >
                         {NAIROBI_ZONES.map((z) => (
                           <option key={z} value={z}>
-                            📍 {z} (Base KES {ZONE_BASE_FEES[z] || 250})
+                            ðŸ“ {z} (Base KES {ZONE_BASE_FEES[z] || 250})
                           </option>
                         ))}
                       </select>
                       {formErrors.zone && (
-                        <span style={styles.fieldErrorText}>⚠️ {formErrors.zone}</span>
+                        <span style={styles.fieldErrorText}>âš ï¸ {formErrors.zone}</span>
                       )}
                     </div>
 
@@ -3384,7 +3384,7 @@ export default function App() {
                       >
                         {PRIORITY_LEVELS.map((p) => (
                           <option key={p} value={p}>
-                            {p === 'Urgent' ? '⚡ Urgent (+KES 100)' : p === 'High' ? '🔥 High (+KES 50)' : '📦 Normal Priority'}
+                            {p === 'Urgent' ? 'âš¡ Urgent (+KES 100)' : p === 'High' ? 'ðŸ”¥ High (+KES 50)' : 'ðŸ“¦ Normal Priority'}
                           </option>
                         ))}
                       </select>
@@ -3407,7 +3407,7 @@ export default function App() {
                       rows={2}
                     />
                     {formErrors.address && (
-                      <span style={styles.fieldErrorText}>⚠️ {formErrors.address}</span>
+                      <span style={styles.fieldErrorText}>âš ï¸ {formErrors.address}</span>
                     )}
                   </div>
 
@@ -3427,7 +3427,7 @@ export default function App() {
                         placeholder="e.g. Laptop - HP ProBook 450"
                       />
                       {formErrors.itemDescription && (
-                        <span style={styles.fieldErrorText}>⚠️ {formErrors.itemDescription}</span>
+                        <span style={styles.fieldErrorText}>âš ï¸ {formErrors.itemDescription}</span>
                       )}
                     </div>
 
@@ -3498,7 +3498,7 @@ export default function App() {
                       style={styles.btnSubmitGreen}
                       disabled={isSubmittingDelivery}
                     >
-                      {isSubmittingDelivery ? 'Creating Delivery...' : '🚀 Submit & Generate QR Slip'}
+                      {isSubmittingDelivery ? 'Creating Delivery...' : 'ðŸš€ Submit & Generate QR Slip'}
                     </button>
                   </div>
                 </form>
@@ -3510,7 +3510,7 @@ export default function App() {
                       <span style={styles.summarySubTag}>REAL-TIME PREVIEW</span>
                       <h3 style={styles.summaryHeading}>Delivery Summary</h3>
                     </div>
-                    <span style={styles.summaryLiveTag}>● Live</span>
+                    <span style={styles.summaryLiveTag}>â— Live</span>
                   </div>
 
                   <div style={styles.summaryBody}>
@@ -3531,7 +3531,7 @@ export default function App() {
                     <div style={styles.summaryItem}>
                       <span style={styles.summaryLabel}>Zone</span>
                       <strong style={styles.summaryValue}>
-                        {formData.zone ? `📍 ${formData.zone}` : <em style={styles.emptyPlaceholder}>Not selected</em>}
+                        {formData.zone ? `ðŸ“ ${formData.zone}` : <em style={styles.emptyPlaceholder}>Not selected</em>}
                       </strong>
                     </div>
 
@@ -3581,14 +3581,14 @@ export default function App() {
             <div style={styles.modalHeader}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ ...styles.newDeliveryIconBadge, backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
-                  🏍️
+                  ðŸï¸
                 </div>
                 <div>
                   <h3 style={styles.modalTitle}>Hire / Register New Rider</h3>
                   <span style={styles.modalSubTag}>HIRE DEDICATED STORE COURIER &amp; ISSUE PWA LINK</span>
                 </div>
               </div>
-              <button onClick={() => setIsRegisterRiderModalOpen(false)} style={styles.modalCloseBtn}>✕</button>
+              <button onClick={() => setIsRegisterRiderModalOpen(false)} style={styles.modalCloseBtn}>âœ•</button>
             </div>
 
             <form onSubmit={handleRegisterRiderSubmit} style={styles.modalBody}>
@@ -3603,7 +3603,7 @@ export default function App() {
                 gap: '10px',
                 marginBottom: '10px'
               }}>
-                <span style={{ fontSize: '20px' }}>🏪</span>
+                <span style={{ fontSize: '20px' }}>ðŸª</span>
                 <div>
                   <strong style={{ fontSize: '13px', color: '#ffffff', display: 'block' }}>
                     Hiring Store: Kamau Electronics (Westlands)
@@ -3630,7 +3630,7 @@ export default function App() {
                   disabled={isSubmittingRider}
                 />
                 {riderFormErrors.name && (
-                  <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.name}</span>
+                  <span style={styles.fieldErrorText}>âš ï¸ {riderFormErrors.name}</span>
                 )}
               </div>
 
@@ -3651,7 +3651,7 @@ export default function App() {
                     disabled={isSubmittingRider}
                   />
                   {riderFormErrors.phone && (
-                    <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.phone}</span>
+                    <span style={styles.fieldErrorText}>âš ï¸ {riderFormErrors.phone}</span>
                   )}
                 </div>
 
@@ -3670,7 +3670,7 @@ export default function App() {
                     disabled={isSubmittingRider}
                   />
                   {riderFormErrors.email && (
-                    <span style={styles.fieldErrorText}>⚠️ {riderFormErrors.email}</span>
+                    <span style={styles.fieldErrorText}>âš ï¸ {riderFormErrors.email}</span>
                   )}
                 </div>
               </div>
@@ -3708,7 +3708,7 @@ export default function App() {
                   disabled={isSubmittingRider}
                   style={styles.btnPrimary}
                 >
-                  {isSubmittingRider ? 'Hiring Rider...' : '🚀 Hire Rider & Generate Link'}
+                  {isSubmittingRider ? 'Hiring Rider...' : 'ðŸš€ Hire Rider & Generate Link'}
                 </button>
               </div>
             </form>
@@ -3723,9 +3723,9 @@ export default function App() {
             <div style={styles.modalHeader}>
               <div>
                 <span style={styles.modalSubTag}>ONBOARDING READY</span>
-                <h3 style={styles.modalTitle}>Rider Registered Successfully ✅</h3>
+                <h3 style={styles.modalTitle}>Rider Registered Successfully âœ…</h3>
               </div>
-              <button onClick={() => setRegisteredRiderSuccess(null)} style={styles.modalCloseBtn}>✕</button>
+              <button onClick={() => setRegisteredRiderSuccess(null)} style={styles.modalCloseBtn}>âœ•</button>
             </div>
 
             <div style={styles.modalBody}>
@@ -3745,14 +3745,14 @@ export default function App() {
                     {registeredRiderSuccess.rider.name}
                   </strong>
                   <span style={{ fontSize: '12px', color: '#38bdf8' }}>
-                    📞 {registeredRiderSuccess.rider.phone} • 📍 {registeredRiderSuccess.rider.hub || 'Westlands'}
+                    ðŸ“ž {registeredRiderSuccess.rider.phone} â€¢ ðŸ“ {registeredRiderSuccess.rider.hub || 'Westlands'}
                   </span>
                 </div>
               </div>
 
               {/* Unique PWA Link Box */}
               <div style={styles.pwaLinkBoxContainer}>
-                <span style={styles.modalLabel}>🔗 PERSONALIZED RIDER PWA ACCESS LINK</span>
+                <span style={styles.modalLabel}>ðŸ”— PERSONALIZED RIDER PWA ACCESS LINK</span>
                 <div style={styles.pwaLinkInputGroup}>
                   <input
                     readOnly
@@ -3765,11 +3765,11 @@ export default function App() {
                     style={styles.copyLinkInsideBtn}
                     onClick={() => handleCopyPwaLink(registeredRiderSuccess.onboardingUrl, registeredRiderSuccess.rider.name)}
                   >
-                    📋 Copy
+                    ðŸ“‹ Copy
                   </button>
                 </div>
                 <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>
-                  Send this link to the rider. When opened, it securely pairs their device to the permanent REFLEX Rider PWA.
+                  Send this link to the rider. When opened, it securely pairs their device to the permanent KASI Rider PWA.
                 </span>
               </div>
 
@@ -3780,7 +3780,7 @@ export default function App() {
                   style={styles.shareWaBtn}
                   onClick={() => handleSharePwaLink(registeredRiderSuccess.onboardingUrl, registeredRiderSuccess.rider)}
                 >
-                  📱 Share via WhatsApp / SMS
+                  ðŸ“± Share via WhatsApp / SMS
                 </button>
                 <button
                   type="button"
@@ -3790,7 +3790,7 @@ export default function App() {
                     setActiveTab('riders');
                   }}
                 >
-                  ✓ Done &amp; View in Roster
+                  âœ“ Done &amp; View in Roster
                 </button>
               </div>
             </div>
@@ -3805,16 +3805,16 @@ export default function App() {
             <div style={styles.modalHeader}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ ...styles.newDeliveryIconBadge, backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
-                  🚴
+                  ðŸš´
                 </div>
                 <div>
                   <h3 style={styles.modalTitle}>Assign Rider</h3>
                   <span style={styles.modalSubTag}>
-                    {assignModalDelivery.reference || `DEL-#${assignModalDelivery.id}`} • {assignModalDelivery.customerName}
+                    {assignModalDelivery.reference || `DEL-#${assignModalDelivery.id}`} â€¢ {assignModalDelivery.customerName}
                   </span>
                 </div>
               </div>
-              <button onClick={() => setAssignModalDelivery(null)} style={styles.modalCloseBtn}>✕</button>
+              <button onClick={() => setAssignModalDelivery(null)} style={styles.modalCloseBtn}>âœ•</button>
             </div>
 
             <div style={styles.modalBody}>
@@ -3822,17 +3822,17 @@ export default function App() {
               <div style={styles.assignDeliveryBriefBox}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                   <strong style={{ fontSize: '13.5px', color: '#ffffff' }}>
-                    📦 {assignModalDelivery.itemDescription}
+                    ðŸ“¦ {assignModalDelivery.itemDescription}
                   </strong>
                   <span style={styles.retailerBadge}>
-                    🏪 {assignModalDelivery.retailerName || 'Kamau Electronics'}
+                    ðŸª {assignModalDelivery.retailerName || 'Kamau Electronics'}
                   </span>
                 </div>
                 <span style={{ fontSize: '12px', color: '#cbd5e1', display: 'block' }}>
-                  📍 <strong>Destination:</strong> {assignModalDelivery.deliveryAddress}
+                  ðŸ“ <strong>Destination:</strong> {assignModalDelivery.deliveryAddress}
                 </span>
                 <span style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginTop: '2px' }}>
-                  👤 <strong>Recipient:</strong> {assignModalDelivery.customerName} ({assignModalDelivery.customerPhone})
+                  ðŸ‘¤ <strong>Recipient:</strong> {assignModalDelivery.customerName} ({assignModalDelivery.customerPhone})
                 </span>
               </div>
 
@@ -3888,7 +3888,7 @@ export default function App() {
                             </span>
                           </div>
                           <span style={{ fontSize: '11.5px', color: '#94a3b8', display: 'block', marginTop: '2px' }}>
-                            📞 {r.phone} • 📍 {r.hub || 'Westlands Hub'}
+                            ðŸ“ž {r.phone} â€¢ ðŸ“ {r.hub || 'Westlands Hub'}
                           </span>
                         </div>
                       </label>
@@ -3919,7 +3919,7 @@ export default function App() {
                     setAssignModalDelivery(null);
                   }}
                 >
-                  🚴 Assign Rider
+                  ðŸš´ Assign Rider
                 </button>
               </div>
             </div>
@@ -4159,7 +4159,7 @@ const styles = {
   timeTag: { fontSize: '10.5px', color: '#64748b' },
   inspectBtn: { fontSize: '11px', color: '#38bdf8', fontWeight: '700' },
   
-  /* ─── Retailer Portal & New Delivery Form Styles ─── */
+  /* â”€â”€â”€ Retailer Portal & New Delivery Form Styles â”€â”€â”€ */
   retailerPortalWrapper: { display: 'flex', flexDirection: 'column', gap: '18px', width: '100%', flex: 1 },
   retailerToolbar: {
     display: 'flex',
@@ -4678,7 +4678,7 @@ const styles = {
     textDecoration: 'none',
     cursor: 'pointer',
   },
-  // ─── Rider PWA Onboarding Gateway & Fleet Management Styles ───
+  // â”€â”€â”€ Rider PWA Onboarding Gateway & Fleet Management Styles â”€â”€â”€
   onboardingPageContainer: {
     minHeight: '100vh',
     width: '100vw',
@@ -5017,7 +5017,7 @@ const styles = {
     cursor: 'pointer',
     boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)'
   },
-  // ─── Dispatcher Control Center Styles ───
+  // â”€â”€â”€ Dispatcher Control Center Styles â”€â”€â”€
   dispatcherSection: {
     display: 'flex',
     flexDirection: 'column',
