@@ -278,7 +278,7 @@ export async function verifyAndCompleteDelivery(deliveryId, verificationCode, pr
           'Content-Type': 'application/json',
           ...authHeader,
         },
-        body: JSON.stringify({ notes: 'Delivered and verified via KASI Rider Mobile PWA' }),
+        body: JSON.stringify({ notes: 'Delivered and verified via Reflex Rider Mobile PWA' }),
       });
 
       if (res.ok) {

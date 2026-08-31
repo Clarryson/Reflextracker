@@ -9,7 +9,7 @@ import { useRiderSocket } from './hooks/useRiderSocket';
 import { getAssignedDeliveries, confirmPickup, validateOnboardingToken } from './services/api';
 
 export default function App() {
-  // ─── 0. Check URL for Onboarding Link (/join/:token or ?join=token) ───
+  // â”€â”€â”€ 0. Check URL for Onboarding Link (/join/:token or ?join=token) â”€â”€â”€
   const urlParams = new URLSearchParams(window.location.search);
   const pathParts = window.location.pathname.split('/');
   const isJoinPath = pathParts[1] === 'join' && pathParts[2];
@@ -107,7 +107,7 @@ export default function App() {
       return [newDelivery, ...prev];
     });
     setIncomingAssignmentModal(newDelivery);
-    showToast(`⚡ KASI Alert: New Order ${newDelivery.reference || '#' + newDelivery.id}`);
+    showToast(`âš¡ Reflex Alert: New Order ${newDelivery.reference || '#' + newDelivery.id}`);
   }, []);
 
   const handleOrderCancelled = useCallback((payload) => {
@@ -119,7 +119,7 @@ export default function App() {
     if (incomingAssignmentModal && String(incomingAssignmentModal.id) === cancelledId) {
       setIncomingAssignmentModal(null);
     }
-    showToast(`⚠️ Order #${cancelledId} was cancelled or reassigned.`);
+    showToast(`âš ï¸ Order #${cancelledId} was cancelled or reassigned.`);
   }, [selectedDelivery, incomingAssignmentModal]);
 
   const handleStatusChanged = useCallback((payload) => {
@@ -154,7 +154,7 @@ export default function App() {
     setDeliveries((prev) =>
       prev.map((d) => (String(d.id) === String(deliveryId) ? { ...d, status: 'PICKED_UP' } : d))
     );
-    showToast('✓ Package picked up! Transit started.');
+    showToast('âœ“ Package picked up! Transit started.');
   };
 
   // Simulate full incoming assignment with sound, vibration, push notification, and popup
@@ -163,7 +163,7 @@ export default function App() {
       id: 'del-ksi-' + Math.floor(1000 + Math.random() * 9000),
       reference: 'KSI-' + Math.floor(100000 + Math.random() * 900000),
       status: 'ASSIGNED',
-      pickupAddress: 'KASI Hub Westlands, Sarit Centre, Nairobi',
+      pickupAddress: 'Reflex Hub Westlands, Sarit Centre, Nairobi',
       dropoffAddress: 'Village Market, Limuru Rd, Gigiri, Nairobi',
       dropoffLat: -1.2297,
       dropoffLng: 36.8045,
@@ -178,17 +178,17 @@ export default function App() {
     const updated = [simDelivery, ...deliveries];
     setDeliveries(updated);
     setIncomingAssignmentModal(simDelivery);
-    showToast(`🔔 KASI Assignment Alert: ${simDelivery.reference}`);
+    showToast(`ðŸ”” Reflex Assignment Alert: ${simDelivery.reference}`);
   };
 
-  // ─── 1. ONBOARDING WELCOME / INVALID SCREEN ───
+  // â”€â”€â”€ 1. ONBOARDING WELCOME / INVALID SCREEN â”€â”€â”€
   if (isOnboardingMode) {
     return (
       <div style={styles.appRoot}>
         <div style={styles.onboardingCard}>
           <div style={styles.onboardingHeaderGroup}>
-            <div style={styles.onboardingLogoBadge}>⚡</div>
-            <h1 style={styles.onboardingBrandTitle}>KASI Rider PWA</h1>
+            <div style={styles.onboardingLogoBadge}>âš¡</div>
+            <h1 style={styles.onboardingBrandTitle}>Reflex Rider PWA</h1>
             <span style={styles.onboardingSubTag}>COURIER ONBOARDING</span>
           </div>
 
@@ -204,12 +204,12 @@ export default function App() {
           {onboardingStatus === 'valid' && onboardingRider && (
             <div style={styles.onboardingContent}>
               <div style={styles.welcomeHeroBox}>
-                <div style={{ fontSize: '32px', marginBottom: '6px' }}>👋</div>
+                <div style={{ fontSize: '32px', marginBottom: '6px' }}>ðŸ‘‹</div>
                 <h2 style={{ margin: '0 0 4px 0', fontSize: '19px', fontWeight: '800', color: '#ffffff' }}>
-                  Welcome to KASI!
+                  Welcome to Reflex!
                 </h2>
                 <p style={{ margin: 0, fontSize: '13px', color: '#cbd5e1', lineHeight: '1.4' }}>
-                  Hi <strong>{onboardingRider.name}</strong>, you have been registered as an authorized KASI delivery courier.
+                  Hi <strong>{onboardingRider.name}</strong>, you have been registered as an authorized Reflex delivery courier.
                 </p>
               </div>
 
@@ -221,22 +221,22 @@ export default function App() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <code style={styles.onboardingCodeTag}>{onboardingRider.code || `#${onboardingRider.id}`}</code>
-                    <span style={styles.pwaActiveBadge}>✓ KASI ACTIVE</span>
+                    <span style={styles.pwaActiveBadge}>âœ“ Reflex ACTIVE</span>
                   </div>
                   <strong style={styles.onboardingNameText}>{onboardingRider.name}</strong>
-                  <span style={styles.onboardingMetaText}>📞 {onboardingRider.phone} • 📍 {onboardingRider.hub || 'Nairobi Central'}</span>
+                  <span style={styles.onboardingMetaText}>ðŸ“ž {onboardingRider.phone} â€¢ ðŸ“ {onboardingRider.hub || 'Nairobi Central'}</span>
                 </div>
               </div>
 
               {/* Home Screen PWA Tip */}
               <div style={styles.homeScreenPromptCard}>
-                <span style={{ fontSize: '20px' }}>📲</span>
+                <span style={{ fontSize: '20px' }}>ðŸ“²</span>
                 <div>
                   <strong style={{ fontSize: '13px', color: '#ffffff', display: 'block' }}>
-                    Add KASI to Home Screen
+                    Add Reflex to Home Screen
                   </strong>
                   <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>
-                    Add KASI to your phone Home Screen for instant 1-tap dispatch access.
+                    Add Reflex to your phone Home Screen for instant 1-tap dispatch access.
                   </span>
                 </div>
               </div>
@@ -253,17 +253,17 @@ export default function App() {
                     localStorage.setItem('reflex_mobile_rider', JSON.stringify(onboardingRider));
                     localStorage.setItem('reflex_mobile_rider_id', targetId);
                   } catch (e) {}
-                  showToast(`👋 Welcome ${onboardingRider.name}! Ready to receive deliveries.`);
+                  showToast(`ðŸ‘‹ Welcome ${onboardingRider.name}! Ready to receive deliveries.`);
                 }}
               >
-                🚀 Launch KASI Rider Workbench →
+                ðŸš€ Launch Reflex Rider Workbench â†’
               </button>
             </div>
           )}
 
           {onboardingStatus === 'invalid' && (
             <div style={styles.onboardingInvalidBox}>
-              <div style={styles.invalidIconCircle}>❌</div>
+              <div style={styles.invalidIconCircle}>âŒ</div>
               <h2 style={{ margin: '0 0 6px 0', fontSize: '18px', fontWeight: '800', color: '#ffffff' }}>
                 Invalid Invitation
               </h2>
@@ -277,7 +277,7 @@ export default function App() {
                   window.location.href = window.location.origin;
                 }}
               >
-                ← Return to Home
+                â† Return to Home
               </button>
             </div>
           )}
@@ -286,7 +286,7 @@ export default function App() {
     );
   }
 
-  // ─── 2. NORMAL PWA RIDER WORKBENCH ───
+  // â”€â”€â”€ 2. NORMAL PWA RIDER WORKBENCH â”€â”€â”€
   return (
     <div style={styles.appRoot}>
       {/* Toast Banner */}
