@@ -59,7 +59,7 @@ export function useRiderSocket({ riderId, onAssignmentReceived, onOrderCancelled
     // 3. System Push Notification
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       try {
-        const title = '⚡ KASI: New Delivery Assigned!';
+        const title = '⚡ Reflex: New Delivery Assigned!';
         const options = {
           body: delivery
             ? `Pickup: ${delivery.pickupAddress}\nDropoff: ${delivery.dropoffAddress}`

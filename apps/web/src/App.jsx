@@ -1254,8 +1254,8 @@ export default function App() {
         <div style={styles.navLeft}>
           <div style={styles.brandLogo}>âš¡</div>
           <div>
-            <h1 style={styles.brandTitle}>KASI Logistics Network</h1>
-            <span style={styles.brandSubtitle}>Dispatcher Â· Retailer Â· Rider â€” Unified Control Plane</span>
+            <h1 style={styles.brandTitle}>REFLEX Logistics Network</h1>
+            <span style={styles.brandSubtitle}>Dispatcher · Retailer · Rider — Production Control Plane</span>
           </div>
         </div>
 
