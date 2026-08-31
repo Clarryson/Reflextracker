@@ -10,7 +10,7 @@ export default function NewAssignmentModal({ delivery, onAccept, onDismiss }) {
         <div style={styles.pulseHeader}>
           <span style={styles.bellIcon}>⚡</span>
           <div>
-            <h2 style={styles.alertTitle}>KASI DISPATCH ASSIGNMENT!</h2>
+            <h2 style={styles.alertTitle}>REFLEX DISPATCH ASSIGNMENT!</h2>
             <span style={styles.alertSub}>New delivery task dispatched to your queue</span>
           </div>
         </div>
