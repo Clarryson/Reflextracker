@@ -3,6 +3,7 @@ import RiderHomeScreen from './screens/RiderHomeScreen';
 import ActiveDeliveryScreen from './screens/ActiveDeliveryScreen';
 import OfflineBanner from './components/OfflineBanner';
 import DeliverySummaryModal from './components/DeliverySummaryModal';
+import NewAssignmentModal from './components/NewAssignmentModal';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { useRiderSocket } from './hooks/useRiderSocket';
 import { getAssignedDeliveries, confirmPickup, validateOnboardingToken } from './services/api';
@@ -42,6 +43,7 @@ export default function App() {
   const [deliveries, setDeliveries] = useState([]);
   const [selectedDelivery, setSelectedDelivery] = useState(null);
   const [summaryDelivery, setSummaryDelivery] = useState(null);
+  const [incomingAssignmentModal, setIncomingAssignmentModal] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -104,7 +106,8 @@ export default function App() {
       if (exists) return prev.map((d) => (String(d.id) === String(newDelivery.id) ? newDelivery : d));
       return [newDelivery, ...prev];
     });
-    showToast(`🔔 New Order Assigned: ${newDelivery.reference || '#' + newDelivery.id}`);
+    setIncomingAssignmentModal(newDelivery);
+    showToast(`⚡ KASI Alert: New Order ${newDelivery.reference || '#' + newDelivery.id}`);
   }, []);
 
   const handleOrderCancelled = useCallback((payload) => {
@@ -113,8 +116,11 @@ export default function App() {
     if (selectedDelivery && String(selectedDelivery.id) === cancelledId) {
       setSelectedDelivery(null);
     }
+    if (incomingAssignmentModal && String(incomingAssignmentModal.id) === cancelledId) {
+      setIncomingAssignmentModal(null);
+    }
     showToast(`⚠️ Order #${cancelledId} was cancelled or reassigned.`);
-  }, [selectedDelivery]);
+  }, [selectedDelivery, incomingAssignmentModal]);
 
   const handleStatusChanged = useCallback((payload) => {
     setDeliveries((prev) =>
@@ -122,7 +128,13 @@ export default function App() {
     );
   }, []);
 
-  const { socket, isConnected } = useRiderSocket({
+  const {
+    socket,
+    isConnected,
+    notificationPermission,
+    requestNotificationPermission,
+    triggerNotificationAlert,
+  } = useRiderSocket({
     riderId,
     onAssignmentReceived: handleAssignmentReceived,
     onOrderCancelled: handleOrderCancelled,
@@ -145,6 +157,30 @@ export default function App() {
     showToast('✓ Package picked up! Transit started.');
   };
 
+  // Simulate full incoming assignment with sound, vibration, push notification, and popup
+  const handleSimulateIncomingNotification = async () => {
+    const simDelivery = {
+      id: 'del-ksi-' + Math.floor(1000 + Math.random() * 9000),
+      reference: 'KSI-' + Math.floor(100000 + Math.random() * 900000),
+      status: 'ASSIGNED',
+      pickupAddress: 'KASI Hub Westlands, Sarit Centre, Nairobi',
+      dropoffAddress: 'Village Market, Limuru Rd, Gigiri, Nairobi',
+      dropoffLat: -1.2297,
+      dropoffLng: 36.8045,
+      customerName: 'Ken Mwangi',
+      customerPhone: '+254701234567',
+      verificationCode: '839201',
+      packageDetails: 'Express Medical & Supplies',
+      createdAt: new Date().toISOString(),
+    };
+
+    triggerNotificationAlert(simDelivery);
+    const updated = [simDelivery, ...deliveries];
+    setDeliveries(updated);
+    setIncomingAssignmentModal(simDelivery);
+    showToast(`🔔 KASI Assignment Alert: ${simDelivery.reference}`);
+  };
+
   // ─── 1. ONBOARDING WELCOME / INVALID SCREEN ───
   if (isOnboardingMode) {
     return (
@@ -152,7 +188,7 @@ export default function App() {
         <div style={styles.onboardingCard}>
           <div style={styles.onboardingHeaderGroup}>
             <div style={styles.onboardingLogoBadge}>⚡</div>
-            <h1 style={styles.onboardingBrandTitle}>REFLEX Rider PWA</h1>
+            <h1 style={styles.onboardingBrandTitle}>KASI Rider PWA</h1>
             <span style={styles.onboardingSubTag}>COURIER ONBOARDING</span>
           </div>
 
@@ -170,10 +206,10 @@ export default function App() {
               <div style={styles.welcomeHeroBox}>
                 <div style={{ fontSize: '32px', marginBottom: '6px' }}>👋</div>
                 <h2 style={{ margin: '0 0 4px 0', fontSize: '19px', fontWeight: '800', color: '#ffffff' }}>
-                  Welcome to REFLEX!
+                  Welcome to KASI!
                 </h2>
                 <p style={{ margin: 0, fontSize: '13px', color: '#cbd5e1', lineHeight: '1.4' }}>
-                  Hi <strong>{onboardingRider.name}</strong>, you have been registered as an authorized REFLEX delivery courier.
+                  Hi <strong>{onboardingRider.name}</strong>, you have been registered as an authorized KASI delivery courier.
                 </p>
               </div>
 
@@ -185,7 +221,7 @@ export default function App() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <code style={styles.onboardingCodeTag}>{onboardingRider.code || `#${onboardingRider.id}`}</code>
-                    <span style={styles.pwaActiveBadge}>✓ PWA ACTIVE</span>
+                    <span style={styles.pwaActiveBadge}>✓ KASI ACTIVE</span>
                   </div>
                   <strong style={styles.onboardingNameText}>{onboardingRider.name}</strong>
                   <span style={styles.onboardingMetaText}>📞 {onboardingRider.phone} • 📍 {onboardingRider.hub || 'Nairobi Central'}</span>
@@ -197,10 +233,10 @@ export default function App() {
                 <span style={{ fontSize: '20px' }}>📲</span>
                 <div>
                   <strong style={{ fontSize: '13px', color: '#ffffff', display: 'block' }}>
-                    Add to Home Screen
+                    Add KASI to Home Screen
                   </strong>
                   <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>
-                    Add REFLEX to your phone Home Screen for instant 1-tap dispatch access.
+                    Add KASI to your phone Home Screen for instant 1-tap dispatch access.
                   </span>
                 </div>
               </div>
@@ -220,7 +256,7 @@ export default function App() {
                   showToast(`👋 Welcome ${onboardingRider.name}! Ready to receive deliveries.`);
                 }}
               >
-                🚀 Continue to Deliveries →
+                🚀 Launch KASI Rider Workbench →
               </button>
             </div>
           )}
@@ -282,6 +318,9 @@ export default function App() {
           onRefresh={loadDeliveries}
           isLoading={isLoading}
           onConfirmPickup={handleConfirmPickup}
+          onSimulateIncomingNotification={handleSimulateIncomingNotification}
+          notificationPermission={notificationPermission}
+          onRequestNotificationPermission={requestNotificationPermission}
         />
       ) : (
         <ActiveDeliveryScreen
@@ -293,6 +332,16 @@ export default function App() {
           onDeliveryCompleted={handleDeliveryCompleted}
         />
       )}
+
+      {/* Interactive New Assignment Popup Modal */}
+      <NewAssignmentModal
+        delivery={incomingAssignmentModal}
+        onAccept={(d) => {
+          setSelectedDelivery(d);
+          setIncomingAssignmentModal(null);
+        }}
+        onDismiss={() => setIncomingAssignmentModal(null)}
+      />
 
       {/* Post-Completion Summary Celebration Modal */}
       <DeliverySummaryModal
@@ -306,7 +355,7 @@ export default function App() {
 
 const styles = {
   appRoot: {
-    fontFamily: '"Inter", Arial, Helvetica, sans-serif',
+    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     backgroundColor: '#090d16',
     minHeight: '100vh',
     color: '#f8fafc',
@@ -371,6 +420,7 @@ const styles = {
     fontSize: '20px',
     fontWeight: '900',
     color: '#ffffff',
+    letterSpacing: '-0.02em',
   },
   onboardingSubTag: {
     fontSize: '10.5px',
