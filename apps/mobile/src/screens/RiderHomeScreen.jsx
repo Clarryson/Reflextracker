@@ -13,6 +13,9 @@ export default function RiderHomeScreen({
   onRefresh,
   isLoading,
   onConfirmPickup,
+  onSimulateIncomingNotification,
+  notificationPermission,
+  onRequestNotificationPermission,
 }) {
   const [filterTab, setFilterTab] = useState('active'); // 'active', 'transit', 'completed', 'all'
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,6 +50,13 @@ export default function RiderHomeScreen({
   });
 
   const getRiderName = (id) => {
+    try {
+      const saved = localStorage.getItem('reflex_mobile_rider');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (String(parsed.id) === String(id)) return parsed.name;
+      }
+    } catch (e) {}
     if (id === '4') return 'Brian Mutua';
     if (id === '5') return 'Grace Wanjiru';
     if (id === '6') return 'James Otieno';
@@ -56,14 +66,14 @@ export default function RiderHomeScreen({
 
   return (
     <div style={styles.container}>
-      {/* Top Professional Header */}
+      {/* Top Header with KASI Branding */}
       <header style={styles.header}>
         <div style={styles.topRow}>
           <div style={styles.brandGroup}>
-            <div style={styles.logoBadge}>⚡</div>
+            <div style={styles.logoBadge}>âš¡</div>
             <div>
-              <h1 style={styles.appTitle}>REFLEX Rider</h1>
-              <span style={styles.regionTag}>Railway Production Network</span>
+              <h1 style={styles.appTitle}>KASI Rider</h1>
+              <span style={styles.regionTag}>âš¡ Express Logistics Network</span>
             </div>
           </div>
 
@@ -78,9 +88,24 @@ export default function RiderHomeScreen({
               <span style={styles.socketText}>{isConnected ? 'Live' : 'Syncing'}</span>
             </div>
             <button onClick={onRefresh} style={styles.refreshIconBtn} disabled={isLoading}>
-              {isLoading ? '⏳' : '🔄'}
+              {isLoading ? 'â³' : 'ðŸ”„'}
             </button>
           </div>
+        </div>
+
+        {/* System Push Notification Bar */}
+        <div style={styles.notifBar}>
+          <div style={styles.notifInfo}>
+            <span>{notificationPermission === 'granted' ? 'ðŸ”” System Alerts:' : 'ðŸ”• Push Alerts:'}</span>
+            <span style={{ color: notificationPermission === 'granted' ? '#4ade80' : '#f59e0b', fontWeight: '800' }}>
+              {notificationPermission === 'granted' ? 'Active' : 'Allow Access'}
+            </span>
+          </div>
+          {notificationPermission !== 'granted' && onRequestNotificationPermission && (
+            <button onClick={onRequestNotificationPermission} style={styles.enableNotifBtn}>
+              Enable Alerts
+            </button>
+          )}
         </div>
 
         {/* Rider Profile Card Button (Opens Switcher Modal) */}
@@ -89,11 +114,11 @@ export default function RiderHomeScreen({
             {getRiderName(riderId).slice(0, 1)}
           </div>
           <div style={styles.riderInfo}>
-            <span style={styles.riderRole}>Active Rider Account</span>
+            <span style={styles.riderRole}>Active Rider Profile</span>
             <strong style={styles.riderNameText}>{getRiderName(riderId)}</strong>
           </div>
           <button style={styles.switchPillBtn}>
-            Switch Profile ▾
+            Switch â–¾
           </button>
         </div>
 
@@ -116,11 +141,29 @@ export default function RiderHomeScreen({
 
       {/* Main Body */}
       <main style={styles.main}>
+        {/* Test / Demo Notification Card */}
+        {onSimulateIncomingNotification && (
+          <div style={styles.demoNotificationCard}>
+            <div style={styles.demoCardLeft}>
+              <span style={styles.demoTag}>⚡ LIVE NOTIFICATION CENTER</span>
+              <p style={styles.demoDesc}>
+                Instant Push Notifications, Audio Chimes & Haptic Vibration Alerts are active.
+              </p>
+            </div>
+            <button
+              onClick={onSimulateIncomingNotification}
+              style={styles.simulateAlertBtn}
+            >
+              ðŸ”” Test Alert
+            </button>
+          </div>
+        )}
+
         {/* In-Transit Ongoing Alert Banner */}
         {inTransit.length > 0 && (
           <div style={styles.inTransitBanner}>
             <div style={styles.bannerLeft}>
-              <span style={styles.inTransitLabel}>🚴 ACTIVE IN-TRANSIT DROPOFF</span>
+              <span style={styles.inTransitLabel}>ðŸš´ ACTIVE IN-TRANSIT DROPOFF</span>
               <p style={styles.inTransitText}>
                 {inTransit[0].reference || `#${inTransit[0].id}`}: {inTransit[0].dropoffAddress || 'Customer Destination'}
               </p>
@@ -129,7 +172,7 @@ export default function RiderHomeScreen({
               onClick={() => onSelectDelivery(inTransit[0])}
               style={styles.resumeBtn}
             >
-              Resume →
+              Resume â†’
             </button>
           </div>
         )}
@@ -191,13 +234,13 @@ export default function RiderHomeScreen({
         {/* Deliveries List */}
         {filteredDeliveries.length === 0 ? (
           <div style={styles.emptyState}>
-            <div style={styles.emptyIcon}>📦</div>
+            <div style={styles.emptyIcon}>ðŸ“¦</div>
             <h3 style={styles.emptyTitle}>No deliveries in this section</h3>
             <p style={styles.emptyText}>
-              Deliveries assigned by Dispatch on Railway will appear here in real-time.
+              Deliveries assigned by Dispatch will appear here in real-time.
             </p>
             <button onClick={onRefresh} style={styles.emptyRefreshBtn}>
-              🔄 Refresh List
+              ðŸ”„ Refresh List
             </button>
           </div>
         ) : (
@@ -220,7 +263,7 @@ export default function RiderHomeScreen({
         )}
       </main>
 
-      {/* ─── Modals ─── */}
+      {/* â”€â”€â”€ Modals â”€â”€â”€ */}
       {/* 1. Delivery Details Modal */}
       <DeliveryDetailModal
         isOpen={Boolean(selectedDetailDelivery)}
@@ -266,16 +309,15 @@ const styles = {
     backgroundColor: '#090d16',
     color: '#f8fafc',
     boxSizing: 'border-box',
-    paddingBottom: '80px',
-    fontFamily: '"Inter", -apple-system, system-ui, sans-serif',
+    paddingBottom: '70px',
   },
   header: {
     backgroundColor: '#0f172a',
-    padding: '16px',
+    padding: '14px 16px',
     borderBottom: '1px solid #1e293b',
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
+    gap: '12px',
   },
   topRow: {
     display: 'flex',
@@ -295,20 +337,20 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '20px',
+    fontSize: '18px',
     boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)',
   },
   appTitle: {
     margin: 0,
-    fontSize: '17px',
+    fontSize: '18px',
     fontWeight: '800',
     color: '#ffffff',
-    letterSpacing: '0.3px',
+    letterSpacing: '-0.02em',
   },
   regionTag: {
     fontSize: '11px',
     color: '#38bdf8',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   headerRight: {
     display: 'flex',
@@ -321,26 +363,52 @@ const styles = {
     gap: '6px',
     backgroundColor: '#1e293b',
     padding: '5px 10px',
-    borderRadius: '20px',
+    borderRadius: '16px',
     border: '1px solid #334155',
   },
   socketDot: {
-    width: '8px',
-    height: '8px',
+    width: '7px',
+    height: '7px',
     borderRadius: '50%',
   },
   socketText: {
     fontSize: '11px',
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#cbd5e1',
   },
   refreshIconBtn: {
     backgroundColor: '#1e293b',
     border: '1px solid #334155',
     color: '#38bdf8',
-    borderRadius: '10px',
+    borderRadius: '8px',
     padding: '6px 10px',
-    fontSize: '14px',
+    fontSize: '13px',
+    cursor: 'pointer',
+  },
+  notifBar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    padding: '6px 12px',
+    borderRadius: '10px',
+    border: '1px solid #1e293b',
+  },
+  notifInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '11.5px',
+    color: '#94a3b8',
+  },
+  enableNotifBtn: {
+    backgroundColor: '#0284c7',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    padding: '4px 8px',
+    fontSize: '11px',
+    fontWeight: '800',
     cursor: 'pointer',
   },
   riderBar: {
@@ -354,8 +422,8 @@ const styles = {
     cursor: 'pointer',
   },
   riderAvatar: {
-    width: '36px',
-    height: '36px',
+    width: '38px',
+    height: '38px',
     borderRadius: '10px',
     backgroundColor: '#0284c7',
     color: '#fff',
@@ -373,11 +441,12 @@ const styles = {
   riderRole: {
     fontSize: '10px',
     color: '#94a3b8',
-    fontWeight: 'bold',
+    fontWeight: '700',
     textTransform: 'uppercase',
   },
   riderNameText: {
     fontSize: '14px',
+    fontWeight: '700',
     color: '#f8fafc',
   },
   switchPillBtn: {
@@ -385,7 +454,7 @@ const styles = {
     border: '1px solid #334155',
     color: '#38bdf8',
     fontSize: '11px',
-    fontWeight: 'bold',
+    fontWeight: '700',
     padding: '6px 10px',
     borderRadius: '8px',
     cursor: 'pointer',
@@ -412,22 +481,59 @@ const styles = {
   kpiLabel: {
     fontSize: '10px',
     color: '#94a3b8',
-    fontWeight: 'bold',
+    fontWeight: '700',
     textTransform: 'uppercase',
     marginTop: '2px',
     display: 'block',
   },
   main: {
-    padding: '16px',
+    padding: '14px 16px',
     display: 'flex',
     flexDirection: 'column',
     gap: '14px',
   },
+  demoNotificationCard: {
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    border: '1px dashed #38bdf8',
+    borderRadius: '14px',
+    padding: '12px 14px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  demoCardLeft: {
+    flex: 1,
+  },
+  demoTag: {
+    fontSize: '11px',
+    fontWeight: '800',
+    color: '#38bdf8',
+    letterSpacing: '0.5px',
+  },
+  demoDesc: {
+    margin: '2px 0 0 0',
+    fontSize: '11.5px',
+    color: '#cbd5e1',
+    lineHeight: '1.3',
+  },
+  simulateAlertBtn: {
+    backgroundColor: '#0284c7',
+    color: '#fff',
+    border: 'none',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    fontSize: '12.5px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
+  },
   inTransitBanner: {
     backgroundColor: 'rgba(2, 132, 199, 0.15)',
     border: '1.5px solid #0284c7',
-    borderRadius: '16px',
-    padding: '14px 16px',
+    borderRadius: '14px',
+    padding: '12px 14px',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -447,6 +553,7 @@ const styles = {
   inTransitText: {
     margin: '2px 0 0 0',
     fontSize: '13px',
+    fontWeight: '600',
     color: '#f8fafc',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -456,10 +563,10 @@ const styles = {
     backgroundColor: '#0284c7',
     color: '#fff',
     border: 'none',
-    padding: '10px 16px',
-    borderRadius: '10px',
+    padding: '8px 14px',
+    borderRadius: '8px',
     fontSize: '12px',
-    fontWeight: 'bold',
+    fontWeight: '700',
     cursor: 'pointer',
     flexShrink: 0,
   },
@@ -470,7 +577,7 @@ const styles = {
   },
   searchBar: {
     width: '100%',
-    padding: '12px 14px',
+    padding: '11px 14px',
     backgroundColor: '#0f172a',
     border: '1px solid #334155',
     borderRadius: '12px',
@@ -485,13 +592,14 @@ const styles = {
     borderRadius: '10px',
     padding: '4px',
     border: '1px solid #1e293b',
+    gap: '3px',
   },
   tabBtn: {
     border: 'none',
     padding: '8px 4px',
     borderRadius: '8px',
     fontSize: '11px',
-    fontWeight: 'bold',
+    fontWeight: '700',
     cursor: 'pointer',
     transition: 'all 0.2s',
   },
@@ -502,26 +610,26 @@ const styles = {
   },
   emptyState: {
     backgroundColor: '#0f172a',
-    borderRadius: '18px',
-    padding: '36px 20px',
+    borderRadius: '16px',
+    padding: '36px 18px',
     textAlign: 'center',
-    border: '1px dashed #334155',
-    marginTop: '10px',
+    border: '1.5px dashed #334155',
+    marginTop: '8px',
   },
   emptyIcon: {
-    fontSize: '44px',
-    marginBottom: '10px',
+    fontSize: '36px',
+    marginBottom: '8px',
   },
   emptyTitle: {
-    margin: '0 0 6px 0',
-    fontSize: '16px',
-    fontWeight: 'bold',
+    margin: '0 0 4px 0',
+    fontSize: '15px',
+    fontWeight: '700',
   },
   emptyText: {
-    margin: '0 0 18px 0',
-    fontSize: '13px',
+    margin: '0 0 16px 0',
+    fontSize: '12px',
     color: '#94a3b8',
-    lineHeight: '1.4',
+    lineHeight: '1.45',
   },
   emptyRefreshBtn: {
     backgroundColor: '#1e293b',
@@ -529,8 +637,8 @@ const styles = {
     color: '#38bdf8',
     padding: '10px 18px',
     borderRadius: '10px',
-    fontSize: '13px',
-    fontWeight: 'bold',
+    fontSize: '12px',
+    fontWeight: '700',
     cursor: 'pointer',
   },
 };

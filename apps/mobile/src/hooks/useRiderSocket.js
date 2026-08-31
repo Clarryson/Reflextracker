@@ -1,23 +1,41 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
 const WS_URL = import.meta.env.VITE_WS_BASE_URL || 'http://localhost:4000';
 
 export function useRiderSocket({ riderId, onAssignmentReceived, onOrderCancelled, onStatusChanged }) {
   const [isConnected, setIsConnected] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
+  );
   const socketRef = useRef(null);
 
-  const triggerAlert = () => {
-    // 1. Haptic vibration
+  // Request system push notification permission
+  const requestNotificationPermission = useCallback(async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+        return permission;
+      } catch (err) {
+        console.warn('Could not request notification permission:', err);
+      }
+    }
+    return 'default';
+  }, []);
+
+  // Multi-sensory notification alert (Audio Chime + Haptic Vibration + System Push)
+  const triggerNotificationAlert = useCallback((delivery = null) => {
+    // 1. Haptic Vibration
     if ('vibrate' in navigator) {
       try {
-        navigator.vibrate([200, 100, 200, 100, 400]);
+        navigator.vibrate([300, 150, 300, 150, 600]);
       } catch {
-        // Ignored if user has not interacted yet
+        // Ignored if user hasn't interacted
       }
     }
 
-    // 2. Audio Chime (Dual tone D5 -> A5)
+    // 2. Audio Chime (Dual tone D5 -> A5 with harmonic gain)
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
@@ -29,15 +47,34 @@ export function useRiderSocket({ riderId, onAssignmentReceived, onOrderCancelled
         osc.type = 'sine';
         osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
         osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15); // A5
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+        gain.gain.setValueAtTime(0.35, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
         osc.start();
-        osc.stop(ctx.currentTime + 0.4);
+        osc.stop(ctx.currentTime + 0.45);
       }
     } catch {
-      // Audio might be restricted until user interacts
+      // Audio context might be restricted before first click
     }
-  };
+
+    // 3. System Push Notification
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const title = '⚡ KASI: New Delivery Assigned!';
+        const options = {
+          body: delivery
+            ? `Pickup: ${delivery.pickupAddress}\nDropoff: ${delivery.dropoffAddress}`
+            : 'A new delivery task has been assigned to you by Dispatch.',
+          icon: '/favicon.svg',
+          badge: '/favicon.svg',
+          tag: 'delivery-assignment',
+          vibrate: [300, 150, 300, 150, 600],
+        };
+        new Notification(title, options);
+      } catch (err) {
+        console.warn('Push notification failed:', err);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!riderId) return;
@@ -89,21 +126,22 @@ export function useRiderSocket({ riderId, onAssignmentReceived, onOrderCancelled
     });
 
     socket.on('delivery:assigned', (payload) => {
-      triggerAlert();
+      const delivery = payload.delivery || payload;
+      triggerNotificationAlert(delivery);
       if (onAssignmentReceived) {
-        onAssignmentReceived(payload.delivery || payload);
+        onAssignmentReceived(delivery);
       }
     });
 
     socket.on('delivery:cancelled', (payload) => {
-      triggerAlert();
+      triggerNotificationAlert(null);
       if (onOrderCancelled) {
         onOrderCancelled(payload);
       }
     });
 
     socket.on('delivery:reassigned', (payload) => {
-      triggerAlert();
+      triggerNotificationAlert(null);
       if (onOrderCancelled) {
         onOrderCancelled(payload);
       }
@@ -118,7 +156,7 @@ export function useRiderSocket({ riderId, onAssignmentReceived, onOrderCancelled
     return () => {
       socket.disconnect();
     };
-  }, [riderId, onAssignmentReceived, onOrderCancelled, onStatusChanged]);
+  }, [riderId, onAssignmentReceived, onOrderCancelled, onStatusChanged, triggerNotificationAlert]);
 
   const emitLocation = (locationPayload) => {
     if (socketRef.current && socketRef.current.connected) {
@@ -126,5 +164,12 @@ export function useRiderSocket({ riderId, onAssignmentReceived, onOrderCancelled
     }
   };
 
-  return { socket: socketRef.current, isConnected, emitLocation };
+  return {
+    socket: socketRef.current,
+    isConnected,
+    notificationPermission,
+    requestNotificationPermission,
+    triggerNotificationAlert,
+    emitLocation,
+  };
 }

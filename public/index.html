@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reflex - Delivery Platform</title>
+    <title>KASI - Logistics & Delivery Platform</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif; }
-        body { background-color: #080c14; color: #f1f5f9; min-height: 100vh; width: 100vw; display: flex; flex-direction: column; overflow-x: hidden; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', Arial, Helvetica, sans-serif; }
+        body { background-color: #080c14; color: #f1f5f9; min-height: 100vh; width: 100vw; display: flex; flex-direction: column; overflow-x: hidden; font-family: 'Inter', Arial, Helvetica, sans-serif; }
         
         header { height: 74px; background: #0f172a; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; width: 100%; }
         .brand { display: flex; align-items: center; gap: 14px; }
@@ -60,7 +64,10 @@
         .token-tag { font-family: monospace; font-size: 11px; color: #fde047; background: #1e293b; padding: 3px 8px; border-radius: 6px; }
         .rider-pill { background: #1e293b; padding: 4px 10px; border-radius: 8px; color: #a5b4fc; font-weight: 700; font-size: 12px; }
 
-        /* Rider View full screen card grid */
+        /* Rider PWA Launch Banner */
+        .pwa-launch-card { background: linear-gradient(135deg, rgba(2, 132, 199, 0.2), rgba(15, 23, 42, 0.9)); border: 2px solid #0284c7; border-radius: 20px; padding: 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 8px 30px rgba(2, 132, 199, 0.25); }
+        .pwa-launch-btn { background: #0284c7; color: white; border: none; padding: 14px 28px; border-radius: 12px; font-weight: 800; font-size: 15px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4); }
+
         .rider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
         .rider-card { background: #0f172a; border: 1px solid #1e293b; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
     </style>
@@ -71,20 +78,20 @@
         <div class="brand">
             <div class="logo">⚡</div>
             <div>
-                <h1 class="brand-title">REFLEX Logistics Network</h1>
-                <span class="brand-sub">Dispatcher · Retailer · Rider — Production Control Plane</span>
+                <h1 class="brand-title">KASI Logistics Network</h1>
+                <span class="brand-sub">Dispatcher · Retailer · Rider — Unified Control Plane</span>
             </div>
         </div>
 
         <div class="nav-tabs">
             <button onclick="switchView('dispatcher')" class="active" id="btn-dispatcher">🎛️ Dispatcher</button>
             <button onclick="switchView('retailer')" id="btn-retailer">📋 Retailer Ledger</button>
-            <button onclick="switchView('rider')" id="btn-rider">🏍️ Rider Portal</button>
+            <button onclick="switchView('rider')" id="btn-rider">🏍️ Rider Workbench</button>
         </div>
 
         <div class="live-status">
             <span class="live-dot"></span>
-            <span id="order-count-tag">Loading...</span>
+            <span id="order-count-tag">Live Grid Connected</span>
         </div>
     </header>
 
@@ -97,64 +104,81 @@
             </div>
         </div>
         <div class="kpi-box">
-            <div class="kpi-icon" style="color: #fde047; background: rgba(253, 224, 71, 0.12);">⏳</div>
+            <div class="kpi-icon" style="color:#fde047">⏳</div>
             <div>
-                <span class="kpi-val" id="kpi-pending" style="color: #fde047;">0</span>
-                <span class="kpi-lbl">Pending Pickup</span>
+                <span class="kpi-val" style="color:#fde047" id="kpi-open">0</span>
+                <span class="kpi-lbl">Open Tasks</span>
             </div>
         </div>
         <div class="kpi-box">
-            <div class="kpi-icon" style="color: #a5b4fc; background: rgba(165, 180, 252, 0.12);">🚴</div>
+            <div class="kpi-icon" style="color:#a5b4fc">👤</div>
             <div>
-                <span class="kpi-val" id="kpi-assigned" style="color: #a5b4fc;">0</span>
+                <span class="kpi-val" style="color:#a5b4fc" id="kpi-assigned">0</span>
                 <span class="kpi-lbl">Assigned</span>
             </div>
         </div>
         <div class="kpi-box">
-            <div class="kpi-icon" style="color: #38bdf8; background: rgba(56, 189, 248, 0.12);">🚚</div>
+            <div class="kpi-icon" style="color:#38bdf8">🚴</div>
             <div>
-                <span class="kpi-val" id="kpi-transit" style="color: #38bdf8;">0</span>
+                <span class="kpi-val" style="color:#38bdf8" id="kpi-transit">0</span>
                 <span class="kpi-lbl">In Transit</span>
             </div>
         </div>
         <div class="kpi-box">
-            <div class="kpi-icon" style="color: #34d399; background: rgba(52, 211, 153, 0.12);">✓</div>
+            <div class="kpi-icon" style="color:#34d399">✓</div>
             <div>
-                <span class="kpi-val" id="kpi-delivered" style="color: #34d399;">0</span>
+                <span class="kpi-val" style="color:#34d399" id="kpi-delivered">0</span>
                 <span class="kpi-lbl">Delivered</span>
             </div>
         </div>
     </div>
 
     <main>
-        <!-- Dispatcher View -->
-        <div id="dispatcher" class="view-panel active">
+        <!-- 1. DISPATCHER VIEW -->
+        <div id="view-dispatcher" class="view-panel active">
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Waybill Reference</th>
+                            <th>Package Description</th>
+                            <th>Customer & Contact</th>
+                            <th>Dropoff Address</th>
+                            <th>Status</th>
+                            <th>Assign Courier</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dispatcher-table-body">
+                        <!-- Rendered via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 2. RETAILER VIEW -->
+        <div id="view-retailer" class="view-panel">
             <div class="grid-layout">
                 <div class="card">
-                    <h2>➕ Create Delivery Order</h2>
-                    <p class="desc">Persists live into MySQL database on Railway.</p>
-                    <form id="delivery-form">
+                    <h2>Create Delivery Request</h2>
+                    <p class="desc">Post package details to KASI Dispatch Grid</p>
+                    <form id="create-order-form">
                         <div class="form-group">
-                            <label>Merchant / Shop Name</label>
-                            <input type="text" id="retailer-name" value="Kamau Electronics" required>
+                            <label>Customer Full Name</label>
+                            <input type="text" id="cust-name" placeholder="e.g. John Kamau" required>
                         </div>
                         <div class="form-group">
-                            <label>Recipient Full Name</label>
-                            <input type="text" id="customer-name" placeholder="e.g. Amina Wanjiru" required>
+                            <label>Customer Phone (M-Pesa)</label>
+                            <input type="text" id="cust-phone" placeholder="e.g. +254712345678" required>
                         </div>
                         <div class="form-group">
-                            <label>Recipient Phone</label>
-                            <input type="text" id="customer-phone" placeholder="e.g. 0712345678" required>
+                            <label>Dropoff Destination</label>
+                            <input type="text" id="cust-dest" placeholder="e.g. Delta Towers, Westlands" required>
                         </div>
                         <div class="form-group">
-                            <label>Delivery Address Node</label>
-                            <input type="text" id="address" placeholder="e.g. Westlands, Nairobi" required>
+                            <label>Package Description</label>
+                            <input type="text" id="pkg-item" placeholder="e.g. iPhone 15 Pro Max Box" required>
                         </div>
-                        <div class="form-group">
-                            <label>Package / Item Description</label>
-                            <input type="text" id="item" placeholder="e.g. Wireless Router" required>
-                        </div>
-                        <button type="submit" class="action-btn">🚀 Log Delivery to Railway DB</button>
+                        <button type="submit" class="action-btn">🚀 Dispatch to Network</button>
                     </form>
                 </div>
 
@@ -162,45 +186,44 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Waybill Ref</th>
-                                <th>Item Description</th>
-                                <th>Recipient & Phone</th>
-                                <th>Destination Address</th>
+                                <th>Waybill</th>
+                                <th>Retailer</th>
+                                <th>Customer</th>
+                                <th>Phone</th>
+                                <th>Item</th>
+                                <th>Destination</th>
+                                <th>Assigned Courier</th>
+                                <th>QR Verification</th>
                                 <th>Status</th>
-                                <th>Assign Fleet Rider</th>
                             </tr>
                         </thead>
-                        <tbody id="dispatcher-table-body"></tbody>
+                        <tbody id="retailer-table-body">
+                            <!-- Rendered via JS -->
+                        </tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        <!-- Retailer View -->
-        <div id="retailer" class="view-panel">
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Waybill Ref</th>
-                            <th>Merchant Shop</th>
-                            <th>Recipient Customer</th>
-                            <th>Phone</th>
-                            <th>Package Description</th>
-                            <th>Destination Node</th>
-                            <th>Assigned Rider</th>
-                            <th>QR Security Token</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="retailer-table-body"></tbody>
-                </table>
+        <!-- 3. RIDER VIEW -->
+        <div id="view-rider" class="view-panel">
+            <!-- PWA Launch Banner -->
+            <div class="pwa-launch-card">
+                <div>
+                    <span style="font-size: 11px; font-weight: 800; color: #38bdf8; letter-spacing: 0.8px;">📱 DEDICATED MOBILE APPLICATION</span>
+                    <h2 style="font-size: 20px; font-weight: 900; margin: 4px 0 6px 0; color: #ffffff;">Launch KASI Rider Mobile PWA</h2>
+                    <p style="font-size: 13px; color: #cbd5e1; max-width: 600px;">
+                        Access the full mobile experience with live audio chimes, haptic vibrations, camera photo compression, QR code scanner, screen wake-lock, and offline sync.
+                    </p>
+                </div>
+                <a href="http://localhost:3000" target="_blank" class="pwa-launch-btn">
+                    🚀 Open KASI Rider PWA (Port 3000) ↗
+                </a>
             </div>
-        </div>
 
-        <!-- Rider View -->
-        <div id="rider" class="view-panel">
-            <div class="rider-grid" id="rider-cards-container"></div>
+            <div class="rider-grid" id="rider-cards-container">
+                <!-- Rendered via JS -->
+            </div>
         </div>
     </main>
 
@@ -208,52 +231,53 @@
         const socket = io();
         let allDeliveries = [];
 
-        function switchView(viewName) {
-            document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
-            document.getElementById(viewName).classList.add('active');
-            document.getElementById('btn-' + viewName).classList.add('active');
+        function switchView(view) {
+            document.querySelectorAll('.view-panel').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-tabs button').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(`view-${view}`).classList.add('active');
+            document.getElementById(`btn-${view}`).classList.add('active');
         }
 
-        // Handle form submission
-        document.getElementById('delivery-form').addEventListener('submit', (e) => {
+        socket.on('connect', () => {
+            console.log('Connected to KASI Control Plane WebSocket');
+        });
+
+        socket.on('update_deliveries', (deliveries) => {
+            allDeliveries = deliveries;
+            renderAll();
+        });
+
+        // Form submission
+        document.getElementById('create-order-form').addEventListener('submit', (e) => {
             e.preventDefault();
-            const payload = {
-                retailer: document.getElementById('retailer-name').value,
-                customer: document.getElementById('customer-name').value,
-                phone: document.getElementById('customer-phone').value,
-                address: document.getElementById('address').value,
-                item: document.getElementById('item').value
-            };
-            socket.emit('create_delivery', payload);
-            document.getElementById('customer-name').value = '';
-            document.getElementById('customer-phone').value = '';
-            document.getElementById('address').value = '';
-            document.getElementById('item').value = '';
-        });
+            const customerName = document.getElementById('cust-name').value;
+            const customerPhone = document.getElementById('cust-phone').value;
+            const deliveryAddress = document.getElementById('cust-dest').value;
+            const itemDescription = document.getElementById('pkg-item').value;
 
-        // Listen for live updates from server
-        socket.on('init_data', (data) => {
-            allDeliveries = Array.isArray(data) ? data : [];
-            renderAllViews();
-        });
+            socket.emit('new_delivery', {
+                customerName,
+                customerPhone,
+                deliveryAddress,
+                itemDescription,
+                retailerName: 'KASI Merchant Hub'
+            });
 
-        socket.on('update_deliveries', (data) => {
-            allDeliveries = Array.isArray(data) ? data : [];
-            renderAllViews();
+            e.target.reset();
+            alert('✓ Delivery dispatched to KASI Network!');
         });
 
         function updateKpis() {
-            const total = allDeliveries.length;
-            document.getElementById('kpi-total').textContent = total;
-            document.getElementById('kpi-pending').textContent = allDeliveries.filter(d => d.status === 'OPEN' || !d.riderName).length;
-            document.getElementById('kpi-assigned').textContent = allDeliveries.filter(d => d.status === 'ASSIGNED').length;
-            document.getElementById('kpi-transit').textContent = allDeliveries.filter(d => d.status === 'PICKED_UP').length;
-            document.getElementById('kpi-delivered').textContent = allDeliveries.filter(d => d.status === 'DELIVERED').length;
-            document.getElementById('order-count-tag').textContent = `${total} orders synced`;
+            document.getElementById('kpi-total').innerText = allDeliveries.length;
+            document.getElementById('kpi-open').innerText = allDeliveries.filter(d => d.status === 'OPEN').length;
+            document.getElementById('kpi-assigned').innerText = allDeliveries.filter(d => d.status === 'ASSIGNED').length;
+            document.getElementById('kpi-transit').innerText = allDeliveries.filter(d => d.status === 'PICKED_UP').length;
+            document.getElementById('kpi-delivered').innerText = allDeliveries.filter(d => d.status === 'DELIVERED').length;
+            document.getElementById('order-count-tag').innerText = `${allDeliveries.length} Total Deliveries`;
         }
 
-        function renderAllViews() {
+        function renderAll() {
             updateKpis();
 
             const dispatcherTbody = document.getElementById('dispatcher-table-body');
@@ -271,7 +295,7 @@
                 const custPhone = d.customerPhone || d.phone || '';
                 const dest = d.deliveryAddress || d.address || 'Nairobi';
                 const item = d.itemDescription || d.item || 'Item Package';
-                const retailer = d.retailerName || d.retailer || 'Kamau Electronics';
+                const retailer = d.retailerName || d.retailer || 'KASI Merchant';
                 const qrToken = d.qrToken || '—';
 
                 // Dispatcher Table
@@ -294,7 +318,7 @@
                 </tr>`;
 
                 // Retailer Table
-                const verifyUrl = `https://backend-production-7f0d0.up.railway.app/verify.html?id=${d.id}&token=${encodeURIComponent(d.qrToken || `REFLEX-${ref}`)}`;
+                const verifyUrl = `https://backend-production-7f0d0.up.railway.app/verify.html?id=${d.id}&token=${encodeURIComponent(d.qrToken || `KASI-${ref}`)}`;
                 retailerTbody.innerHTML += `<tr>
                     <td><span class="code-pill">${ref}</span></td>
                     <td>${retailer}</td>
@@ -322,8 +346,9 @@
                             <p style="margin-bottom: 4px; color: #cbd5e1;">👤 ${custName} (${custPhone})</p>
                             <p style="color: #94a3b8;">📍 ${dest}</p>
                         </div>
-                        <div style="font-size: 11px; color: #64748b;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #64748b;">
                             <span>Assigned: ${d.riderName || 'Pending Assignment'}</span>
+                            <a href="http://localhost:3000" target="_blank" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Open in PWA →</a>
                         </div>
                     </div>
                 `;
