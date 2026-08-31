@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { QRCodeSVG } from 'qrcode.react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://backend-production-7f0d0.up.railway.app/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') ? '/api-proxy' : 'https://backend-production-7f0d0.up.railway.app/api');
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://backend-production-7f0d0.up.railway.app';
 const LOCAL_HOST_IP = '192.168.2.101'; // Local Wi-Fi IP for seamless phone camera scanning
 
@@ -219,7 +219,7 @@ export default function App() {
     const key = specificRiderId ? `rider_${specificRiderId}` : role;
     if (tokenCache.current[key]) return tokenCache.current[key];
 
-    let email = import.meta.env.VITE_DISPATCHER_EMAIL || 'omondi@KASI.co.ke';
+    let email = import.meta.env.VITE_DISPATCHER_EMAIL || 'omondi@reflex.co.ke';
     let password = import.meta.env.VITE_DISPATCHER_PASSWORD || 'Password123!';
     
     if (role === 'retailer') {
@@ -252,6 +252,21 @@ export default function App() {
     } catch (err) {
       console.warn('Authentication failure:', err.message);
     }
+
+    // Secondary fallback to retailer or rider login
+    try {
+      const fallbackRes = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'kamau@electronics.co.ke', password: 'Password123!' })
+      });
+      const fallbackData = await fallbackRes.json();
+      if (fallbackData.success && fallbackData.data?.token) {
+        tokenCache.current[key] = fallbackData.data.token;
+        return fallbackData.data.token;
+      }
+    } catch (e) {}
+
     return null;
   }, []);
 
