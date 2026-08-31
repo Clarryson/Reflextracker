@@ -1,4 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="20" fill="#0284c7"/>
-  <path d="M25 50 L45 70 L75 30" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%">
+  <defs>
+    <linearGradient id="kasiBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="60%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#0369a1"/>
+    </linearGradient>
+    <linearGradient id="kasiGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ade80"/>
+      <stop offset="100%" stop-color="#16a34a"/>
+    </linearGradient>
+    <linearGradient id="bgGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#131c2e"/>
+      <stop offset="100%" stop-color="#090d16"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Container Box -->
+  <rect width="120" height="120" rx="28" fill="url(#bgGlow)"/>
+  <rect x="2" y="2" width="116" height="116" rx="26" fill="none" stroke="#1e293b" stroke-width="2.5"/>
+
+  <!-- KASI 'K' Dynamic Delivery Monogram -->
+  <!-- Left Pillar / Speed Bar -->
+  <path d="M 32 26 L 46 26 L 46 94 L 32 94 Z" fill="url(#kasiBlue)"/>
+
+  <!-- Top-Right Diagonal Ray -->
+  <path d="M 46 64 L 78 28 L 96 28 L 58 72 Z" fill="url(#kasiBlue)"/>
+
+  <!-- Bottom-Right Velocity Arrow -->
+  <path d="M 52 64 L 76 94 L 94 94 L 66 58 Z" fill="url(#kasiBlue)"/>
+
+  <!-- Live Pulse Beacon Point (Green) -->
+  <circle cx="92" cy="28" r="6" fill="url(#kasiGreen)" stroke="#090d16" stroke-width="2"/>
 </svg>

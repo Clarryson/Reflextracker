@@ -13,6 +13,9 @@ export default function RiderHomeScreen({
   onRefresh,
   isLoading,
   onConfirmPickup,
+  onSimulateIncomingNotification,
+  notificationPermission,
+  onRequestNotificationPermission,
 }) {
   const [filterTab, setFilterTab] = useState('active'); // 'active', 'transit', 'completed', 'all'
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,14 +66,14 @@ export default function RiderHomeScreen({
 
   return (
     <div style={styles.container}>
-      {/* Top Professional Header */}
+      {/* Top Header with KASI Branding */}
       <header style={styles.header}>
         <div style={styles.topRow}>
           <div style={styles.brandGroup}>
             <div style={styles.logoBadge}>⚡</div>
             <div>
-              <h1 style={styles.appTitle}>REFLEX Rider</h1>
-              <span style={styles.regionTag}>Railway Production Network</span>
+              <h1 style={styles.appTitle}>KASI Rider</h1>
+              <span style={styles.regionTag}>⚡ Express Logistics Network</span>
             </div>
           </div>
 
@@ -90,17 +93,32 @@ export default function RiderHomeScreen({
           </div>
         </div>
 
+        {/* System Push Notification Bar */}
+        <div style={styles.notifBar}>
+          <div style={styles.notifInfo}>
+            <span>{notificationPermission === 'granted' ? '🔔 System Alerts:' : '🔕 Push Alerts:'}</span>
+            <span style={{ color: notificationPermission === 'granted' ? '#4ade80' : '#f59e0b', fontWeight: '800' }}>
+              {notificationPermission === 'granted' ? 'Active' : 'Allow Access'}
+            </span>
+          </div>
+          {notificationPermission !== 'granted' && onRequestNotificationPermission && (
+            <button onClick={onRequestNotificationPermission} style={styles.enableNotifBtn}>
+              Enable Alerts
+            </button>
+          )}
+        </div>
+
         {/* Rider Profile Card Button (Opens Switcher Modal) */}
         <div style={styles.riderBar} onClick={() => setIsSwitcherOpen(true)}>
           <div style={styles.riderAvatar}>
             {getRiderName(riderId).slice(0, 1)}
           </div>
           <div style={styles.riderInfo}>
-            <span style={styles.riderRole}>Active Rider Account</span>
+            <span style={styles.riderRole}>Active Rider Profile</span>
             <strong style={styles.riderNameText}>{getRiderName(riderId)}</strong>
           </div>
           <button style={styles.switchPillBtn}>
-            Switch Profile ▾
+            Switch ▾
           </button>
         </div>
 
@@ -123,6 +141,24 @@ export default function RiderHomeScreen({
 
       {/* Main Body */}
       <main style={styles.main}>
+        {/* Test / Demo Notification Card */}
+        {onSimulateIncomingNotification && (
+          <div style={styles.demoNotificationCard}>
+            <div style={styles.demoCardLeft}>
+              <span style={styles.demoTag}>TEST KASI DISPATCH ALERT</span>
+              <p style={styles.demoDesc}>
+                Trigger live incoming order chime, vibration, and popup notification.
+              </p>
+            </div>
+            <button
+              onClick={onSimulateIncomingNotification}
+              style={styles.simulateAlertBtn}
+            >
+              🔔 Test Alert
+            </button>
+          </div>
+        )}
+
         {/* In-Transit Ongoing Alert Banner */}
         {inTransit.length > 0 && (
           <div style={styles.inTransitBanner}>
@@ -201,7 +237,7 @@ export default function RiderHomeScreen({
             <div style={styles.emptyIcon}>📦</div>
             <h3 style={styles.emptyTitle}>No deliveries in this section</h3>
             <p style={styles.emptyText}>
-              Deliveries assigned by Dispatch on Railway will appear here in real-time.
+              Deliveries assigned by Dispatch will appear here in real-time.
             </p>
             <button onClick={onRefresh} style={styles.emptyRefreshBtn}>
               🔄 Refresh List
@@ -306,10 +342,10 @@ const styles = {
   },
   appTitle: {
     margin: 0,
-    fontSize: '17px',
+    fontSize: '18px',
     fontWeight: '800',
     color: '#ffffff',
-    letterSpacing: '-0.01em',
+    letterSpacing: '-0.02em',
   },
   regionTag: {
     fontSize: '11px',
@@ -347,6 +383,32 @@ const styles = {
     borderRadius: '8px',
     padding: '6px 10px',
     fontSize: '13px',
+    cursor: 'pointer',
+  },
+  notifBar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    padding: '6px 12px',
+    borderRadius: '10px',
+    border: '1px solid #1e293b',
+  },
+  notifInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '11.5px',
+    color: '#94a3b8',
+  },
+  enableNotifBtn: {
+    backgroundColor: '#0284c7',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    padding: '4px 8px',
+    fontSize: '11px',
+    fontWeight: '800',
     cursor: 'pointer',
   },
   riderBar: {
@@ -429,6 +491,43 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '14px',
+  },
+  demoNotificationCard: {
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    border: '1px dashed #38bdf8',
+    borderRadius: '14px',
+    padding: '12px 14px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  demoCardLeft: {
+    flex: 1,
+  },
+  demoTag: {
+    fontSize: '11px',
+    fontWeight: '800',
+    color: '#38bdf8',
+    letterSpacing: '0.5px',
+  },
+  demoDesc: {
+    margin: '2px 0 0 0',
+    fontSize: '11.5px',
+    color: '#cbd5e1',
+    lineHeight: '1.3',
+  },
+  simulateAlertBtn: {
+    backgroundColor: '#0284c7',
+    color: '#fff',
+    border: 'none',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    fontSize: '12.5px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
   },
   inTransitBanner: {
     backgroundColor: 'rgba(2, 132, 199, 0.15)',
