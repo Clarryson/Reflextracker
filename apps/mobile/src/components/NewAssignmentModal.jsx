@@ -6,9 +6,9 @@ export default function NewAssignmentModal({ delivery, onAccept, onDismiss }) {
   return (
     <div style={styles.overlay}>
       <div style={styles.modalCard}>
-        {/* Animated KASI Pulse Header */}
+        {/* Animated Reflex Pulse Header */}
         <div style={styles.pulseHeader}>
-          <span style={styles.bellIcon}>⚡</span>
+          <span style={styles.bellIcon}>âš¡</span>
           <div>
             <h2 style={styles.alertTitle}>REFLEX DISPATCH ASSIGNMENT!</h2>
             <span style={styles.alertSub}>New delivery task dispatched to your queue</span>
@@ -24,16 +24,16 @@ export default function NewAssignmentModal({ delivery, onAccept, onDismiss }) {
 
           {delivery.customerName && (
             <div style={styles.customerRow}>
-              <span style={styles.customerName}>👤 {delivery.customerName}</span>
+              <span style={styles.customerName}>ðŸ‘¤ {delivery.customerName}</span>
               {delivery.customerPhone && (
-                <span style={styles.customerPhone}>📞 {delivery.customerPhone}</span>
+                <span style={styles.customerPhone}>ðŸ“ž {delivery.customerPhone}</span>
               )}
             </div>
           )}
 
           <div style={styles.routeSection}>
             <div style={styles.routeItem}>
-              <span style={styles.dotPickup}>●</span>
+              <span style={styles.dotPickup}>â—</span>
               <div>
                 <span style={styles.routeLabel}>PICKUP FROM</span>
                 <p style={styles.routeText}>{delivery.pickupAddress || 'Merchant Warehouse'}</p>
@@ -43,7 +43,7 @@ export default function NewAssignmentModal({ delivery, onAccept, onDismiss }) {
             <div style={styles.routeDivider} />
 
             <div style={styles.routeItem}>
-              <span style={styles.dotDropoff}>●</span>
+              <span style={styles.dotDropoff}>â—</span>
               <div>
                 <span style={styles.routeLabel}>DROPOFF TO</span>
                 <p style={styles.routeText}>{delivery.dropoffAddress || 'Customer Address'}</p>
@@ -53,7 +53,7 @@ export default function NewAssignmentModal({ delivery, onAccept, onDismiss }) {
 
           {delivery.packageDetails && (
             <div style={styles.packageBadge}>
-              📦 {delivery.packageDetails}
+              ðŸ“¦ {delivery.packageDetails}
             </div>
           )}
         </div>
@@ -64,7 +64,7 @@ export default function NewAssignmentModal({ delivery, onAccept, onDismiss }) {
             Dismiss
           </button>
           <button onClick={() => onAccept(delivery)} style={styles.acceptBtn}>
-            ⚡ Accept & Start Pickup →
+            âš¡ Accept & Start Pickup â†’
           </button>
         </div>
       </div>
