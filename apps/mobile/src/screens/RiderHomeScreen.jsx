@@ -66,14 +66,14 @@ export default function RiderHomeScreen({
 
   return (
     <div style={styles.container}>
-      {/* Top Header with KASI Branding */}
+      {/* Top Header with Reflex Branding */}
       <header style={styles.header}>
         <div style={styles.topRow}>
           <div style={styles.brandGroup}>
-            <div style={styles.logoBadge}>âš¡</div>
+            <div style={styles.logoBadge}>Ã¢Å¡Â¡</div>
             <div>
-              <h1 style={styles.appTitle}>KASI Rider</h1>
-              <span style={styles.regionTag}>âš¡ Express Logistics Network</span>
+              <h1 style={styles.appTitle}>Reflex Rider</h1>
+              <span style={styles.regionTag}>âš¡ Smart Bodaboda Delivery Network</span>
             </div>
           </div>
 
@@ -88,7 +88,7 @@ export default function RiderHomeScreen({
               <span style={styles.socketText}>{isConnected ? 'Live' : 'Syncing'}</span>
             </div>
             <button onClick={onRefresh} style={styles.refreshIconBtn} disabled={isLoading}>
-              {isLoading ? 'â³' : 'ðŸ”„'}
+              {isLoading ? 'Ã¢ÂÂ³' : 'Ã°Å¸â€â€ž'}
             </button>
           </div>
         </div>
@@ -96,7 +96,7 @@ export default function RiderHomeScreen({
         {/* System Push Notification Bar */}
         <div style={styles.notifBar}>
           <div style={styles.notifInfo}>
-            <span>{notificationPermission === 'granted' ? 'ðŸ”” System Alerts:' : 'ðŸ”• Push Alerts:'}</span>
+            <span>{notificationPermission === 'granted' ? 'Ã°Å¸â€â€ System Alerts:' : 'Ã°Å¸â€â€¢ Push Alerts:'}</span>
             <span style={{ color: notificationPermission === 'granted' ? '#4ade80' : '#f59e0b', fontWeight: '800' }}>
               {notificationPermission === 'granted' ? 'Active' : 'Allow Access'}
             </span>
@@ -118,7 +118,7 @@ export default function RiderHomeScreen({
             <strong style={styles.riderNameText}>{getRiderName(riderId)}</strong>
           </div>
           <button style={styles.switchPillBtn}>
-            Switch â–¾
+            Switch Ã¢â€“Â¾
           </button>
         </div>
 
@@ -145,7 +145,7 @@ export default function RiderHomeScreen({
         {onSimulateIncomingNotification && (
           <div style={styles.demoNotificationCard}>
             <div style={styles.demoCardLeft}>
-              <span style={styles.demoTag}>⚡ LIVE NOTIFICATION CENTER</span>
+              <span style={styles.demoTag}>âš¡ LIVE NOTIFICATION CENTER</span>
               <p style={styles.demoDesc}>
                 Instant Push Notifications, Audio Chimes & Haptic Vibration Alerts are active.
               </p>
@@ -154,7 +154,7 @@ export default function RiderHomeScreen({
               onClick={onSimulateIncomingNotification}
               style={styles.simulateAlertBtn}
             >
-              ðŸ”” Test Alert
+              Ã°Å¸â€â€ Test Alert
             </button>
           </div>
         )}
@@ -163,7 +163,7 @@ export default function RiderHomeScreen({
         {inTransit.length > 0 && (
           <div style={styles.inTransitBanner}>
             <div style={styles.bannerLeft}>
-              <span style={styles.inTransitLabel}>ðŸš´ ACTIVE IN-TRANSIT DROPOFF</span>
+              <span style={styles.inTransitLabel}>Ã°Å¸Å¡Â´ ACTIVE IN-TRANSIT DROPOFF</span>
               <p style={styles.inTransitText}>
                 {inTransit[0].reference || `#${inTransit[0].id}`}: {inTransit[0].dropoffAddress || 'Customer Destination'}
               </p>
@@ -172,7 +172,7 @@ export default function RiderHomeScreen({
               onClick={() => onSelectDelivery(inTransit[0])}
               style={styles.resumeBtn}
             >
-              Resume â†’
+              Resume Ã¢â€ â€™
             </button>
           </div>
         )}
@@ -234,13 +234,13 @@ export default function RiderHomeScreen({
         {/* Deliveries List */}
         {filteredDeliveries.length === 0 ? (
           <div style={styles.emptyState}>
-            <div style={styles.emptyIcon}>ðŸ“¦</div>
+            <div style={styles.emptyIcon}>Ã°Å¸â€œÂ¦</div>
             <h3 style={styles.emptyTitle}>No deliveries in this section</h3>
             <p style={styles.emptyText}>
               Deliveries assigned by Dispatch will appear here in real-time.
             </p>
             <button onClick={onRefresh} style={styles.emptyRefreshBtn}>
-              ðŸ”„ Refresh List
+              Ã°Å¸â€â€ž Refresh List
             </button>
           </div>
         ) : (
@@ -263,7 +263,7 @@ export default function RiderHomeScreen({
         )}
       </main>
 
-      {/* â”€â”€â”€ Modals â”€â”€â”€ */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Modals Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
       {/* 1. Delivery Details Modal */}
       <DeliveryDetailModal
         isOpen={Boolean(selectedDetailDelivery)}

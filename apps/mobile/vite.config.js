@@ -6,5 +6,12 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
+    proxy: {
+      '/api': {
+        target: 'https://backend-production-7f0d0.up.railway.app',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 });

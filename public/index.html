@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KASI - Logistics & Delivery Platform</title>
+    <title>Reflex - Delivery Platform</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -76,17 +76,17 @@
 
     <header>
         <div class="brand">
-            <div class="logo">⚡</div>
+            <div class="logo">âš¡</div>
             <div>
-                <h1 class="brand-title">KASI Logistics Network</h1>
-                <span class="brand-sub">Dispatcher · Retailer · Rider — Unified Control Plane</span>
+                <h1 class="brand-title">REFLEX Logistics Network</h1>
+                <span class="brand-sub">Dispatcher Â· Retailer Â· Rider â€” Production Control Plane</span>
             </div>
         </div>
 
         <div class="nav-tabs">
-            <button onclick="switchView('dispatcher')" class="active" id="btn-dispatcher">🎛️ Dispatcher</button>
-            <button onclick="switchView('retailer')" id="btn-retailer">📋 Retailer Ledger</button>
-            <button onclick="switchView('rider')" id="btn-rider">🏍️ Rider Workbench</button>
+            <button onclick="switchView('dispatcher')" class="active" id="btn-dispatcher">ðŸŽ›ï¸ Dispatcher</button>
+            <button onclick="switchView('retailer')" id="btn-retailer">ðŸ“‹ Retailer Ledger</button>
+            <button onclick="switchView('rider')" id="btn-rider">ðŸï¸ Rider Workbench</button>
         </div>
 
         <div class="live-status">
@@ -97,35 +97,35 @@
 
     <div class="kpi-strip">
         <div class="kpi-box">
-            <div class="kpi-icon">📦</div>
+            <div class="kpi-icon">ðŸ“¦</div>
             <div>
                 <span class="kpi-val" id="kpi-total">0</span>
                 <span class="kpi-lbl">Total Dispatches</span>
             </div>
         </div>
         <div class="kpi-box">
-            <div class="kpi-icon" style="color:#fde047">⏳</div>
+            <div class="kpi-icon" style="color:#fde047">â³</div>
             <div>
                 <span class="kpi-val" style="color:#fde047" id="kpi-open">0</span>
                 <span class="kpi-lbl">Open Tasks</span>
             </div>
         </div>
         <div class="kpi-box">
-            <div class="kpi-icon" style="color:#a5b4fc">👤</div>
+            <div class="kpi-icon" style="color:#a5b4fc">ðŸ‘¤</div>
             <div>
                 <span class="kpi-val" style="color:#a5b4fc" id="kpi-assigned">0</span>
                 <span class="kpi-lbl">Assigned</span>
             </div>
         </div>
         <div class="kpi-box">
-            <div class="kpi-icon" style="color:#38bdf8">🚴</div>
+            <div class="kpi-icon" style="color:#38bdf8">ðŸš´</div>
             <div>
                 <span class="kpi-val" style="color:#38bdf8" id="kpi-transit">0</span>
                 <span class="kpi-lbl">In Transit</span>
             </div>
         </div>
         <div class="kpi-box">
-            <div class="kpi-icon" style="color:#34d399">✓</div>
+            <div class="kpi-icon" style="color:#34d399">âœ“</div>
             <div>
                 <span class="kpi-val" style="color:#34d399" id="kpi-delivered">0</span>
                 <span class="kpi-lbl">Delivered</span>
@@ -160,7 +160,7 @@
             <div class="grid-layout">
                 <div class="card">
                     <h2>Create Delivery Request</h2>
-                    <p class="desc">Post package details to KASI Dispatch Grid</p>
+                    <p class="desc">Post package details to Reflex Dispatch Grid</p>
                     <form id="create-order-form">
                         <div class="form-group">
                             <label>Customer Full Name</label>
@@ -178,7 +178,7 @@
                             <label>Package Description</label>
                             <input type="text" id="pkg-item" placeholder="e.g. iPhone 15 Pro Max Box" required>
                         </div>
-                        <button type="submit" class="action-btn">🚀 Dispatch to Network</button>
+                        <button type="submit" class="action-btn">ðŸš€ Dispatch to Network</button>
                     </form>
                 </div>
 
@@ -210,14 +210,14 @@
             <!-- PWA Launch Banner -->
             <div class="pwa-launch-card">
                 <div>
-                    <span style="font-size: 11px; font-weight: 800; color: #38bdf8; letter-spacing: 0.8px;">📱 DEDICATED MOBILE APPLICATION</span>
-                    <h2 style="font-size: 20px; font-weight: 900; margin: 4px 0 6px 0; color: #ffffff;">Launch KASI Rider Mobile PWA</h2>
+                    <span style="font-size: 11px; font-weight: 800; color: #38bdf8; letter-spacing: 0.8px;">ðŸ“± DEDICATED MOBILE APPLICATION</span>
+                    <h2 style="font-size: 20px; font-weight: 900; margin: 4px 0 6px 0; color: #ffffff;">Launch Reflex Rider Mobile PWA</h2>
                     <p style="font-size: 13px; color: #cbd5e1; max-width: 600px;">
                         Access the full mobile experience with live audio chimes, haptic vibrations, camera photo compression, QR code scanner, screen wake-lock, and offline sync.
                     </p>
                 </div>
                 <a href="http://localhost:3000" target="_blank" class="pwa-launch-btn">
-                    🚀 Open KASI Rider PWA (Port 3000) ↗
+                    ðŸš€ Open Reflex Rider PWA (Port 3000) â†—
                 </a>
             </div>
 
@@ -240,7 +240,7 @@
         }
 
         socket.on('connect', () => {
-            console.log('Connected to KASI Control Plane WebSocket');
+            console.log('Connected to Reflex Control Plane WebSocket');
         });
 
         socket.on('update_deliveries', (deliveries) => {
@@ -261,11 +261,11 @@
                 customerPhone,
                 deliveryAddress,
                 itemDescription,
-                retailerName: 'KASI Merchant Hub'
+                retailerName: 'Reflex Merchant Hub'
             });
 
             e.target.reset();
-            alert('✓ Delivery dispatched to KASI Network!');
+            alert('âœ“ Delivery dispatched to Reflex Network!');
         });
 
         function updateKpis() {
@@ -295,8 +295,8 @@
                 const custPhone = d.customerPhone || d.phone || '';
                 const dest = d.deliveryAddress || d.address || 'Nairobi';
                 const item = d.itemDescription || d.item || 'Item Package';
-                const retailer = d.retailerName || d.retailer || 'KASI Merchant';
-                const qrToken = d.qrToken || '—';
+                const retailer = d.retailerName || d.retailer || 'Reflex Merchant';
+                const qrToken = d.qrToken || 'â€”';
 
                 // Dispatcher Table
                 dispatcherTbody.innerHTML += `<tr>
@@ -313,12 +313,12 @@
                                 <option value="5">Grace Wanjiru (0756789012)</option>
                                 <option value="6">James Otieno (0767890123)</option>
                             </select>
-                        ` : `<span class="rider-pill">🚴 ${d.riderName}</span>`}
+                        ` : `<span class="rider-pill">ðŸš´ ${d.riderName}</span>`}
                     </td>
                 </tr>`;
 
                 // Retailer Table
-                const verifyUrl = `https://backend-production-7f0d0.up.railway.app/verify.html?id=${d.id}&token=${encodeURIComponent(d.qrToken || `KASI-${ref}`)}`;
+                const verifyUrl = `https://backend-production-7f0d0.up.railway.app/verify.html?id=${d.id}&token=${encodeURIComponent(d.qrToken || `Reflex-${ref}`)}`;
                 retailerTbody.innerHTML += `<tr>
                     <td><span class="code-pill">${ref}</span></td>
                     <td>${retailer}</td>
@@ -326,8 +326,8 @@
                     <td>${custPhone}</td>
                     <td>${item}</td>
                     <td>${dest}</td>
-                    <td>${d.riderName ? `<span class="rider-pill">🚴 ${d.riderName}</span>` : '<em style="color:#64748b">Pending</em>'}</td>
-                    <td><a href="${verifyUrl}" target="_blank" class="token-tag" style="text-decoration:none;" title="Click to verify on Railway">${qrToken ? qrToken.slice(0, 16) + '...' : 'Verify ↗'}</a></td>
+                    <td>${d.riderName ? `<span class="rider-pill">ðŸš´ ${d.riderName}</span>` : '<em style="color:#64748b">Pending</em>'}</td>
+                    <td><a href="${verifyUrl}" target="_blank" class="token-tag" style="text-decoration:none;" title="Click to verify on Railway">${qrToken ? qrToken.slice(0, 16) + '...' : 'Verify â†—'}</a></td>
                     <td><span class="badge ${statusClass}">${statusClass}</span></td>
                 </tr>`;
 
@@ -342,13 +342,13 @@
                             <span class="badge ${statusClass}">${statusClass}</span>
                         </div>
                         <div style="background: #1e293b; padding: 12px; border-radius: 12px; font-size: 13px;">
-                            <p style="margin-bottom: 4px;">📦 <strong>${item}</strong></p>
-                            <p style="margin-bottom: 4px; color: #cbd5e1;">👤 ${custName} (${custPhone})</p>
-                            <p style="color: #94a3b8;">📍 ${dest}</p>
+                            <p style="margin-bottom: 4px;">ðŸ“¦ <strong>${item}</strong></p>
+                            <p style="margin-bottom: 4px; color: #cbd5e1;">ðŸ‘¤ ${custName} (${custPhone})</p>
+                            <p style="color: #94a3b8;">ðŸ“ ${dest}</p>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #64748b;">
                             <span>Assigned: ${d.riderName || 'Pending Assignment'}</span>
-                            <a href="http://localhost:3000" target="_blank" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Open in PWA →</a>
+                            <a href="http://localhost:3000" target="_blank" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Open in PWA â†’</a>
                         </div>
                     </div>
                 `;
