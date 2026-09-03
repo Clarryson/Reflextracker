@@ -1,6 +1,6 @@
 {
-  "short_name": "REFLEX Rider",
-  "name": "REFLEX - Real-Time Delivery Tracking & Management",
+  "short_name": "Reflex Rider",
+  "name": "Reflex - Real-Time Delivery Tracking & Management",
   "icons": [
     {
       "src": "/favicon.svg",
@@ -9,8 +9,8 @@
     }
   ],
   "start_url": "/",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#090d16",
+  "theme_color": "#0284c7",
   "display": "standalone",
   "orientation": "portrait"
 }

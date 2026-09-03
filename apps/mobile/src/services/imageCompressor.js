@@ -48,16 +48,16 @@ export function compressImage(file, maxWidth = 1280, quality = 0.75, metadata = 
 
         // Watermark Banner at bottom
         const barHeight = Math.max(36, Math.round(height * 0.06));
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.fillStyle = 'rgba(9, 13, 22, 0.88)';
         ctx.fillRect(0, height - barHeight, width, barHeight);
 
         // Watermark text
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 13px "Inter", -apple-system, sans-serif';
         const now = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-        let watermarkText = `REFLEX PoD • ${now}`;
+        let watermarkText = `âš¡ Reflex PoD â€¢ ${now}`;
         if (metadata && metadata.latitude && metadata.longitude) {
-          watermarkText += ` • GPS: ${metadata.latitude.toFixed(5)}, ${metadata.longitude.toFixed(5)}`;
+          watermarkText += ` â€¢ GPS: ${metadata.latitude.toFixed(5)}, ${metadata.longitude.toFixed(5)}`;
         }
         ctx.fillText(watermarkText, 12, height - Math.round(barHeight / 2) + 5);
 
